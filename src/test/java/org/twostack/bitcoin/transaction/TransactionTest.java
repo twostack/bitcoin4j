@@ -19,6 +19,10 @@ package org.twostack.bitcoin.transaction;
 
 import org.junit.Test;
 
+import java.io.IOException;
+
+import static org.junit.Assert.assertEquals;
+
 /**
  * Just check the Transaction.verify() method. Most methods that have complicated logic in Transaction are tested
  * elsewhere, e.g. signing and hashing are well exercised by the wallet tests, the full block chain tests and so on.
@@ -33,8 +37,8 @@ public class TransactionTest {
 
 
     @Test
-    public void TestSerializeDeserialize() {
-//        Transaction transaction = Transaction.fromHex(tx1hex);
-//        expect(transaction.uncheckedSerialize(), equals(tx1hex));
+    public void TestSerializeDeserialize() throws IOException {
+        Transaction transaction = Transaction.fromHex(tx1hex);
+        assertEquals(transaction.uncheckedSerialize(), tx1hex);
     }
 }

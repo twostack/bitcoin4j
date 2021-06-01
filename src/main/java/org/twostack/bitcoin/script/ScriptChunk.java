@@ -157,7 +157,7 @@ public class ScriptChunk {
 
         boolean asm = false;
         StringBuffer str = new StringBuffer();
-        if (data.length <= 0) {
+        if (data == null || data.length <= 0) {
 //            if (chunk.opcodenum == null) return "";
 
             // no data chunk

@@ -18,23 +18,16 @@
 
 package org.twostack.bitcoin.script;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Lists;
 //import org.twostack.bitcoin.transaction.Transaction.SigHash;
 //import org.twostack.bitcoin.crypto.TransactionSignature;
 //import org.twostack.bitcoin.params.MainNetParams;
 //import org.twostack.bitcoin.params.TestNet3Params;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.twostack.bitcoin.UnsafeByteArrayOutputStream;
 import org.twostack.bitcoin.Utils;
-import org.twostack.bitcoin.address.Address;
-import org.twostack.bitcoin.address.LegacyAddress;
-import org.twostack.bitcoin.params.NetworkParameters;
-import org.twostack.bitcoin.script.Script.VerifyFlag;
-import org.hamcrest.core.IsNot;
-import org.junit.Assert;
-import org.junit.Before;
+        import org.twostack.bitcoin.script.Script.VerifyFlag;
+        import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,14 +36,13 @@ import org.twostack.bitcoin.transaction.Transaction;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static org.twostack.bitcoin.Utils.HEX;
-import static org.twostack.bitcoin.script.ScriptOpCodes.OP_0;
-import static org.twostack.bitcoin.script.ScriptOpCodes.OP_INVALIDOPCODE;
-import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.*;
+        import static org.twostack.bitcoin.script.ScriptOpCodes.OP_INVALIDOPCODE;
+        import static org.junit.Assert.*;
 
 public class ScriptTest {
     // From tx 05e04c26c12fe408a3c1b71aa7996403f6acad1045252b1c62e055496f4d2cb1 on the testnet.
@@ -106,82 +98,78 @@ public class ScriptTest {
     @Test
     public void should_parse_these_known_scripts(){
 
-        String parsed = Script.fromString("0 PUSHDATA4 3 0x010203 0").toAsmString();
+        String parsed = Script.fromAsmString("0 PUSHDATA4 3 0x010203 0").toAsmString();
         assertEquals("0 PUSHDATA4 3 0x010203 0", parsed);
 
-        String parsed2 = Script.fromString("0 PUSHDATA2 3 0x010203 0").toAsmString();
+        String parsed2 = Script.fromAsmString("0 PUSHDATA2 3 0x010203 0").toAsmString();
         assertEquals("0 PUSHDATA2 3 0x010203 0", parsed2);
 
-        String parsed3 = Script.fromString("0 PUSHDATA1 3 0x010203 0").toAsmString();
+        String parsed3 = Script.fromAsmString("0 PUSHDATA1 3 0x010203 0").toAsmString();
         assertEquals("0 PUSHDATA1 3 0x010203 0", parsed3);
 
-        String parsed4 = Script.fromString("0 3 0x010203 0").toAsmString();
+        String parsed4 = Script.fromAsmString("0 3 0x010203 0").toAsmString();
         assertEquals("0 3 0x010203 0", parsed4);
     }
 
-//    @Test
-//    public void testOp0() {
-//        // Check that OP_0 doesn't NPE and pushes an empty stack frame.
-//        Transaction tx = new Transaction(TESTNET);
-//        tx.addInput(new TransactionInput(TESTNET, tx, new byte[] {}));
-//        Script script = new ScriptBuilder().smallNum(0).build();
-//
-//        LinkedList<byte[]> stack = new LinkedList<>();
-//        Script.executeScript(tx, 0, script, stack, Script.ALL_VERIFY_FLAGS);
-//        assertEquals("OP_0 push length", 0, stack.get(0).length);
-//    }
 
-    private Script parseScriptString(String string) throws IOException {
-        String[] words = string.split("[ \\t\\n]");
-        
-        UnsafeByteArrayOutputStream out = new UnsafeByteArrayOutputStream();
+    @Test
+    public void can_roundtrip_serializing_of_a_script(){
 
-        for(String w : words) {
-            if (w.equals(""))
-                continue;
-            if (w.matches("^-?[0-9]*$")) {
-                // Number
-                long val = Long.parseLong(w);
-                if (val >= -1 && val <= 16)
-                    out.write(Script.encodeToOpN((int)val));
-                else
-                    Script.writeBytes(out, Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(val), false)));
-            } else if (w.matches("^0x[0-9a-fA-F]*$")) {
-                // Raw hex data, inserted NOT pushed onto stack:
-                out.write(HEX.decode(w.substring(2).toLowerCase()));
-            } else if (w.length() >= 2 && w.startsWith("'") && w.endsWith("'")) {
-                // Single-quoted string, pushed as data. NOTE: this is poor-man's
-                // parsing, spaces/tabs/newlines in single-quoted strings won't work.
-                Script.writeBytes(out, w.substring(1, w.length() - 1).getBytes(StandardCharsets.UTF_8));
-            } else if (ScriptOpCodes.getOpCode(w) != OP_INVALIDOPCODE) {
-                // opcode, e.g. OP_ADD or OP_1:
-                out.write(ScriptOpCodes.getOpCode(w));
-            } else if (w.startsWith("OP_") && ScriptOpCodes.getOpCode(w.substring(3)) != OP_INVALIDOPCODE) {
-                // opcode, e.g. OP_ADD or OP_1:
-                out.write(ScriptOpCodes.getOpCode(w.substring(3)));
-            } else {
-                throw new RuntimeException("Invalid word: '" + w + "'");
-            }                        
-        }
-        
-        return new Script(out.toByteArray());
+        final String str = "0 RETURN 34 0x31346b7871597633656d48477766386d36596753594c516b4743766e395172677239 66 0x303236336661663734633031356630376532633834343538623566333035653262323762366566303838393238383133326435343264633139633436663064663532 PUSHDATA1 150 0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        final Script script = Script.fromAsmString(str);
+
+        assertEquals(str, script.toAsmString());
     }
 
-    private Set<VerifyFlag> parseVerifyFlags(String str) {
-        Set<VerifyFlag> flags = EnumSet.noneOf(VerifyFlag.class);
-        if (!"NONE".equals(str)) {
-            for (String flag : str.split(",")) {
-                try {
-                    flags.add(VerifyFlag.valueOf(flag));
-                } catch (IllegalArgumentException x) {
-                    log.debug("Cannot handle verify flag {} -- ignored.", flag);
-                }
-            }
-        }
-        return flags;
+    /// fromByteArray constructor tests
+    @Test
+    public void should_parse_buffer_with_op_code(){
+        byte[] buf = new byte[1];
+        buf[0] = ScriptOpCodes.OP_0;
+        Script script = Script.fromByteArray(buf);
+        assertEquals(script.chunks.size(), 1);
+        assertEquals(script.chunks.get(0).opcode, buf[0]);
+
     }
 
-// FIXME: This is important
+    @Test
+    public void should_parse_buffer_with_data(){
+        byte[] buf = new byte[]{3,1,2,3};
+        Script script = Script.fromByteArray(buf);
+        assertEquals(HEX.encode(script.chunks.get(0).data), "010203");
+    }
+
+    @Test
+    public void should_parse_this_asm_script(){
+        String asm = "DUP HASH160 20 0xf4c03610e60ad15100929cc23da2f3a799af1725 EQUALVERIFY CHECKSIG";
+        Script script = Script.fromAsmString(asm);
+
+        assertEquals(script.chunks.get(0).opcode, ScriptOpCodes.OP_DUP);
+        assertEquals(script.chunks.get(1).opcode, ScriptOpCodes.OP_HASH160);
+        assertEquals(script.chunks.get(2).opcode, 20);
+        assertEquals(HEX.encode(script.chunks.get(2).data), "f4c03610e60ad15100929cc23da2f3a799af1725");
+        assertEquals(script.chunks.get(3).opcode, ScriptOpCodes.OP_EQUALVERIFY);
+        assertEquals(script.chunks.get(4).opcode, ScriptOpCodes.OP_CHECKSIG);
+    }
+
+
+    @Test
+    public void should_parse_this_second_asm_script(){
+        String asm = "RETURN 3 0x026d02 6 0x0568656c6c6f";
+        Script script = Script.fromAsmString(asm);
+
+        assertEquals(script.toAsmString(), asm);
+    }
+
+    @Test
+    public void should_fail_on_invalid_hex(){
+        String asm = "RETURN 3 0x026d02 7 0x0568656c6c6fzz";
+
+        assertThrows(ScriptException.class, () -> Script.fromAsmString(asm));
+    }
+
+
+//  FIXME: These test vectors are important
 //    @Test
 //    public void dataDrivenScripts() throws Exception {
 //        JsonNode json = new ObjectMapper()

@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="org.twostack.bitcoin.script.ScriptTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2021-06-01T05:27:42" hostname="bpnixos" time="0.03">
-  <properties/>
-  <testcase name="should_parse_these_known_scripts" classname="org.twostack.bitcoin.script.ScriptTest" time="0.03"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

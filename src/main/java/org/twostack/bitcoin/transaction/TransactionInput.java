@@ -35,20 +35,26 @@ public class TransactionInput {
         return fromByteArray(bytes, null);
     }
 
+    public static TransactionInput fromReader(ReadUtils reader){
+
+        byte[] prevTxnId = reader.readBytes(32);
+        long prevTxnOutputIndex = reader.readUint32();
+
+        VarInt vi = reader.readVarInt();
+        int scriptLength = vi.getOriginalSizeInBytes();
+
+        Script scriptSig = new Script(reader.readBytes(scriptLength));
+        long sequenceNumber = reader.readUint32();
+
+        return new TransactionInput(prevTxnId, prevTxnOutputIndex, scriptSig, sequenceNumber);
+
+    }
+
     public static TransactionInput fromByteArray(byte[] bytes, UnlockingScriptBuilder scriptBuilder) {
 
         ReadUtils rw = new ReadUtils(bytes);
 
-        byte[] prevTxnId = rw.readBytes(32);
-        long prevTxnOutputIndex = rw.readUint32();
-
-        VarInt vi = rw.readVarInt();
-        int scriptLength = vi.getOriginalSizeInBytes();
-
-        Script scriptSig = new Script(rw.readBytes(scriptLength));
-        long sequenceNumber = rw.readUint32();
-
-        return new TransactionInput(prevTxnId, prevTxnOutputIndex, scriptSig, sequenceNumber);
+        return fromReader(rw);
     }
 
     public byte[] serialize() throws IOException {

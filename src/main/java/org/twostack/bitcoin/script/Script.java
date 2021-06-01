@@ -19,6 +19,7 @@
 
 package org.twostack.bitcoin.script;
 
+import com.google.common.io.BaseEncoding;
 import org.bouncycastle.crypto.digests.RIPEMD160Digest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -144,7 +145,7 @@ public class Script {
         return new Script(programBytes, LocalDateTime.now().toEpochSecond(ZoneOffset.UTC));
     }
 
-    public static Script fromString(String program) throws ScriptException{
+    public static Script fromAsmString(String program) throws ScriptException{
         List<ScriptChunk> chunks = stringToChunks(program);
 
         return new Script(chunks);
@@ -203,11 +204,19 @@ public class Script {
 
             Integer opcodenum = ScriptOpCodes.getOpCode(opcode);
 
-            if (opcodenum >= OP_2 && opcodenum <= OP_16) {
-                opcodenum = Integer.valueOf(token);
-                ScriptChunk newChunk = new ScriptChunk(opcodenum, Utils.HEX.decode(tokenList.get(index + 1).substring(2)));
-                _chunks.add(newChunk);
-                index = index + 2; //step by two
+            if ((opcodenum >= OP_2 && opcodenum <= OP_16) || opcodenum == OP_INVALIDOPCODE) {
+                try {
+                    opcodenum = Integer.valueOf(token);
+                    ScriptChunk newChunk = new ScriptChunk(opcodenum, Utils.HEX.decode(tokenList.get(index + 1).substring(2)));
+                    _chunks.add(newChunk);
+                    index = index + 2; //step by two
+
+                }catch (NumberFormatException ex){
+                    throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, ex.getMessage());
+                }catch (Exception ex){
+                    throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, ex.getMessage());
+                }
+
             } else if (opcodenum == ScriptOpCodes.OP_PUSHDATA1 ||
                     opcodenum == ScriptOpCodes.OP_PUSHDATA2 ||
                     opcodenum == ScriptOpCodes.OP_PUSHDATA4) {
