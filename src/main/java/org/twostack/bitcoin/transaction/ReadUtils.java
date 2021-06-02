@@ -65,7 +65,7 @@ public class ReadUtils {
         }
     }
 
-    protected byte[] readBytes(int length) throws ProtocolException {
+    public byte[] readBytes(int length) throws ProtocolException {
         checkReadLength(length);
         try {
             byte[] b = new byte[length];
@@ -77,28 +77,28 @@ public class ReadUtils {
         }
     }
 
-    protected byte readByte() throws ProtocolException {
+    public byte readByte() throws ProtocolException {
         checkReadLength(1);
         return payload[cursor++];
     }
 
-    protected byte[] readByteArray() throws ProtocolException {
+    public byte[] readByteArray() throws ProtocolException {
         final int length = readVarInt().intValue();
         return readBytes(length);
     }
 
-    protected String readStr() throws ProtocolException {
+    public String readStr() throws ProtocolException {
         int length = readVarInt().intValue();
         return length == 0 ? "" : new String(readBytes(length), StandardCharsets.UTF_8); // optimization for empty strings
     }
 
-    protected Sha256Hash readHash() throws ProtocolException {
+    public Sha256Hash readHash() throws ProtocolException {
         // We have to flip it around, as it's been read off the wire in little endian.
         // Not the most efficient way to do this but the clearest.
         return Sha256Hash.wrapReversed(readBytes(32));
     }
 
-    protected boolean hasMoreBytes() {
+    public boolean hasMoreBytes() {
         return cursor < payload.length;
     }
 

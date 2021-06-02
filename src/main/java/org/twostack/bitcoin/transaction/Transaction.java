@@ -21,6 +21,9 @@ public class Transaction {
     private ArrayList<TransactionInput> inputs = new ArrayList<>();
     private ArrayList<TransactionOutput> outputs = new ArrayList<>();
 
+    /// Max value for an unsigned 32 bit value
+    static final long NLOCKTIME_MAX_VALUE = 4294967295L;
+
     /** Threshold for lockTime: below this value it is interpreted as block number, otherwise as timestamp. **/
     public static final int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
 
@@ -31,6 +34,10 @@ public class Transaction {
     public static final int MAX_STANDARD_TX_SIZE = 100000;
 
     private ByteBuffer txHash;
+
+    public Transaction(){
+
+    }
 
     /*
     Creates a Transaction from an array of bytes
