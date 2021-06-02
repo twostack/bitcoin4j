@@ -7,7 +7,6 @@ import java.io.IOException;
 import java.math.BigInteger;
 
 public class TransactionInput {
-   UnlockingScriptBuilder _scriptBuilder;
 
     /// Maximum size an unsigned int can be. Used as value of [sequenceNumber] when we
     /// want to indicate that the transaction's [Transaction.nLockTime] should be ignored.
@@ -31,10 +30,6 @@ public class TransactionInput {
         _sequenceNumber = sequenceNumber;
     }
 
-    public static TransactionInput fromByteArray(byte[] bytes) {
-        return fromByteArray(bytes, null);
-    }
-
     public static TransactionInput fromReader(ReadUtils reader){
 
         byte[] prevTxnId = reader.readBytes(32); //FIXME: Reverse this to get LE
@@ -50,7 +45,7 @@ public class TransactionInput {
 
     }
 
-    public static TransactionInput fromByteArray(byte[] bytes, UnlockingScriptBuilder scriptBuilder) {
+    public static TransactionInput fromByteArray(byte[] bytes) {
 
         ReadUtils rw = new ReadUtils(bytes);
 

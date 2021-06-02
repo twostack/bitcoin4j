@@ -17,6 +17,7 @@
 package org.twostack.bitcoin.address;
 
 import org.twostack.bitcoin.ECKey;
+import org.twostack.bitcoin.PublicKey;
 import org.twostack.bitcoin.exception.AddressFormatException;
 import org.twostack.bitcoin.params.NetworkAddressType;
 import org.twostack.bitcoin.script.Script;
@@ -62,20 +63,15 @@ public abstract class Address extends PrefixedChecksummedBytes implements Compar
     /**
      * Construct an {@link Address} that represents the public part of the given {@link ECKey}.
      * 
-     * @param params
+     * @param networkType
      *            network this address is valid for
      * @param key
      *            only the public part is used
-     * @param outputScriptType
-     *            script type the address should use
      * @return constructed address
      */
-//    public static Address fromKey(final NetworkAddressType params, final ECKey key, final ScriptType outputScriptType) {
-//        if (outputScriptType == Script.ScriptType.P2PKH)
-//            return LegacyAddress.fromKey(params, key);
-//        else
-//            throw new IllegalArgumentException(outputScriptType.toString());
-//    }
+    public static Address fromKey(final NetworkAddressType networkType, final PublicKey key) {
+        return LegacyAddress.fromKey(networkType, key);
+    }
 
     /**
      * Get either the public key hash or script hash that is encoded in the address.

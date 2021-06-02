@@ -11,6 +11,8 @@ import java.io.OutputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class Transaction {
 
@@ -121,5 +123,17 @@ public class Transaction {
 
         return Utils.HEX.encode(os.toByteArray());
     }
+
+
+    /** Returns an unmodifiable view of all inputs. */
+    public List<TransactionInput> getInputs() {
+        return Collections.unmodifiableList(inputs);
+    }
+
+    /** Returns an unmodifiable view of all outputs. */
+    public List<TransactionOutput> getOutputs() {
+        return Collections.unmodifiableList(outputs);
+    }
+
 
 }

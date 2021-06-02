@@ -3,12 +3,9 @@ package org.twostack.bitcoin.transaction;
 import org.twostack.bitcoin.VarInt;
 import org.twostack.bitcoin.script.Script;
 import org.twostack.bitcoin.script.ScriptBuilder;
-import org.twostack.bitcoin.script.ScriptChunk;
 
-import javax.annotation.Nullable;
 import java.io.IOException;
 import java.math.BigInteger;
-import java.util.ArrayList;
 
 public class TransactionOutput {
 
@@ -47,20 +44,6 @@ public class TransactionOutput {
         return fromReader(reader);
 
     }
-
-//    ///Returns true is satoshi amount if outside of valid range
-//    ///
-//    /// See [Transaction.MAX_MONEY]
-//    bool invalidSatoshis() {
-//        //    if (this._satoshis > MAX_SAFE_INTEGER) {
-//        if (this._satoshis < BigInt.zero)
-//            return true;
-//
-//        if (this._satoshis > Transaction.MAX_MONEY) //yes, there is a finite amount of bitcoin
-//            return true;
-//
-//        return false;
-//    }
 
     /// Returns a byte array containing the raw transaction output
     public byte[] serialize() throws IOException {

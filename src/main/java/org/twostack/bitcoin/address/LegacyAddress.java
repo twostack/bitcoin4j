@@ -20,6 +20,7 @@ package org.twostack.bitcoin.address;
 
 import com.google.common.primitives.UnsignedBytes;
 import org.twostack.bitcoin.ECKey;
+import org.twostack.bitcoin.PublicKey;
 import org.twostack.bitcoin.exception.AddressFormatException;
 import org.twostack.bitcoin.params.NetworkAddressType;
 import org.twostack.bitcoin.params.NetworkParameters;
@@ -49,7 +50,7 @@ public class LegacyAddress extends Address {
     /**
      * Private constructor. Use {@link #fromBase58(NetworkAddressType, String)},
      * {@link #fromPubKeyHash(NetworkAddressType, byte[])},
-     * {@link #fromKey(NetworkAddressType, ECKey)}.
+     * {@link #fromKey(NetworkAddressType, PublicKey)}.
      * 
      * @param networkAddressType
      *            network this address is valid for
@@ -87,7 +88,7 @@ public class LegacyAddress extends Address {
      *            only the public part is used
      * @return constructed address
      */
-    public static LegacyAddress fromKey(NetworkAddressType networkAddressType, ECKey key) {
+    public static LegacyAddress fromKey(NetworkAddressType networkAddressType, PublicKey key) {
         return fromPubKeyHash(networkAddressType, key.getPubKeyHash());
     }
 
