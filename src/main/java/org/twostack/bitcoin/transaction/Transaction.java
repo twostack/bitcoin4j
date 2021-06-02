@@ -16,8 +16,8 @@ public class Transaction {
 
     private long version;
     private long nLockTime = 0;
-    private ArrayList<TransactionInput> inputs;
-    private ArrayList<TransactionOutput> outputs;
+    private ArrayList<TransactionInput> inputs = new ArrayList<>();
+    private ArrayList<TransactionOutput> outputs = new ArrayList<>();
 
     /** Threshold for lockTime: below this value it is interpreted as block number, otherwise as timestamp. **/
     public static final int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
@@ -57,13 +57,13 @@ public class Transaction {
         Integer i, sizeTxIns, sizeTxOuts;
 
         version = reader.readUint32();
-        sizeTxIns = reader.readVarInt().getOriginalSizeInBytes();
+        sizeTxIns = reader.readVarInt().intValue();
         for (i = 0; i < sizeTxIns; i++) {
             TransactionInput input = TransactionInput.fromReader(reader);
             inputs.add(input);
         }
 
-        sizeTxOuts = reader.readVarInt().getOriginalSizeInBytes();
+        sizeTxOuts = reader.readVarInt().intValue();
         for (i = 0; i < sizeTxOuts; i++) {
             TransactionOutput output = TransactionOutput.fromReader(reader);
             output.setOutputIndex(i);

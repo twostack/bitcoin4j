@@ -21,21 +21,9 @@ public class TransactionOutput {
     private Script script;
 
     public static TransactionOutput fromReader(ReadUtils reader) {
-        return null;
-    }
-
-    /// The default constructor. Initializes a "clean slate" output.
-    TransactionOutput(BigInteger satoshis, Script script){
-        this.satoshis = satoshis;
-        this.script = script;
-    }
-
-    public static TransactionOutput fromReader(byte[] buffer) {
-
-        ReadUtils reader = new ReadUtils(buffer);
 
         BigInteger satoshis = reader.readUint64();
-        int size = reader.readVarInt().getOriginalSizeInBytes();
+        int size = reader.readVarInt().intValue();
         Script script;
         if (size != 0) {
             script = Script.fromByteArray(reader.readBytes(size)); //FIXME: ensure a copy is taken
@@ -44,6 +32,20 @@ public class TransactionOutput {
         }
 
         return new TransactionOutput(satoshis, script);
+    }
+
+    /// The default constructor. Initializes a "clean slate" output.
+    TransactionOutput(BigInteger satoshis, Script script){
+        this.satoshis = satoshis;
+        this.script = script;
+    }
+
+    public static TransactionOutput fromByteBuffer(byte[] buffer) {
+
+        ReadUtils reader = new ReadUtils(buffer);
+
+        return fromReader(reader);
+
     }
 
 //    ///Returns true is satoshi amount if outside of valid range
@@ -68,10 +70,12 @@ public class TransactionOutput {
         writer.writeUint64LE(satoshis);
 
         //write the locking script
-        VarInt varInt = new VarInt(script.getProgram().length);
+        byte[] outputScript = script.getProgram();
+        VarInt varInt = new VarInt(outputScript.length);
         byte[] varIntBytes = varInt.encode();
         writer.writeBytes(varIntBytes, varIntBytes.length);
 
+        writer.writeBytes(outputScript, outputScript.length);
         return writer.getBytes();
     }
 

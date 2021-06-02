@@ -39,6 +39,6 @@ public class TransactionTest {
     @Test
     public void TestSerializeDeserialize() throws IOException {
         Transaction transaction = Transaction.fromHex(tx1hex);
-        assertEquals(transaction.uncheckedSerialize(), tx1hex);
+        assertEquals(tx1hex, transaction.uncheckedSerialize());
     }
 }

@@ -37,11 +37,11 @@ public class TransactionInput {
 
     public static TransactionInput fromReader(ReadUtils reader){
 
-        byte[] prevTxnId = reader.readBytes(32);
+        byte[] prevTxnId = reader.readBytes(32); //FIXME: Reverse this to get LE
         long prevTxnOutputIndex = reader.readUint32();
 
         VarInt vi = reader.readVarInt();
-        int scriptLength = vi.getOriginalSizeInBytes();
+        int scriptLength = vi.intValue();
 
         Script scriptSig = new Script(reader.readBytes(scriptLength));
         long sequenceNumber = reader.readUint32();
@@ -67,8 +67,8 @@ public class TransactionInput {
         byte[] scriptBytes = _scriptSig.getProgram();
         VarInt vi = new VarInt(scriptBytes.length);
 
-        wu.writeBytes(vi.encode(), 0);
-        wu.writeBytes(scriptBytes, 0);
+        wu.writeBytes(vi.encode(), vi.getSizeInBytes());
+        wu.writeBytes(scriptBytes, scriptBytes.length);
 
         wu.writeUint32LE(_sequenceNumber);
 
