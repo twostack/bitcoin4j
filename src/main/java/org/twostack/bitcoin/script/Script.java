@@ -69,6 +69,7 @@ import static com.google.common.base.Preconditions.*;
  */
 public class Script {
 
+
     /** Enumeration to encapsulate the type of this script. */
     public enum ScriptType {
         P2PKH(1), // pay to pubkey hash (aka pay to address)
@@ -125,7 +126,7 @@ public class Script {
     }
 
     // Used from ScriptBuilder.
-    Script(List<ScriptChunk> chunks) {
+    public Script(List<ScriptChunk> chunks) {
         this.chunks = Collections.unmodifiableList(new ArrayList<>(chunks));
         creationTimeSeconds = Utils.currentTimeSeconds();
     }
@@ -140,6 +141,7 @@ public class Script {
         parse(programBytes);
         creationTimeSeconds = 0;
     }
+
 
     public static Script fromByteArray(byte[] programBytes) throws ScriptException{
         return new Script(programBytes, LocalDateTime.now().toEpochSecond(ZoneOffset.UTC));

@@ -65,15 +65,17 @@ public class TransactionTest {
 
         P2PKHLockBuilder locker = new P2PKHLockBuilder(recipientAddress);
         P2PKHUnlockBuilder unlocker = new P2PKHUnlockBuilder(privateKey.getPublicKey());
-        Transaction txn = new TransactionBuilder()
+        Transaction unsignedTxn = new TransactionBuilder()
          .spendFromTransaction(txWithUTXO, 0, Transaction.NLOCKTIME_MAX_VALUE, unlocker) //set global sequenceNumber/nLocktime time for each Input created
          .spendTo(recipientAddress, BigInteger.valueOf(50000000L), locker) //spend half of a bitcoin (we should have 1 in the UTXO)
          .sendChangeTo(changeAddress, locker) // spend change to myself
          .withFeePerKb(100000)
          .build();
+
+         TransactionOutput utxoToSign = txWithUTXO.getOutputs().get(0);
+         Transaction signedTx = new TransactionSigner().sign(unsignedTxn, utxoToSign,0, privateKey, SigHashType.ALL.byteValue() | SigHashType.FORKID.byteValue());
 //
 //        //Sign the Transaction Input
-//        txn.signInput(0, privateKey, sighashType: SighashType.SIGHASH_ALL | SighashType.SIGHASH_FORKID);
 //
 //        //FIXME: Where's the assertion ?
 //

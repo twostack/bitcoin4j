@@ -6,10 +6,7 @@ import org.twostack.bitcoin.script.Script;
 
 import javax.annotation.Nullable;
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class TransactionBuilder {
 
@@ -25,9 +22,18 @@ public class TransactionBuilder {
 
     private final long DEFAULT_FEE_PER_KB = 512; //amount in satoshis
 
+    static final BigInteger DUST_AMOUNT = BigInteger.valueOf(546);
+
+    /// Margin of error to allow fees in the vecinity of the expected value but doesn't allow a big difference
+    private static final BigInteger FEE_SECURITY_MARGIN = BigInteger.valueOf(150);
+
     private long feePerKb = DEFAULT_FEE_PER_KB;
 
     private BigInteger transactionFee;
+
+    private boolean changeScriptFlag = false;
+
+    private Set<TransactionOption> transactionOptions = new HashSet<TransactionOption>();
 
 
     /// Safe upper bound for change address script size in bytes
@@ -94,6 +100,8 @@ public class TransactionBuilder {
         }
 
         updateChangeOutput();
+
+        changeScriptFlag = true;
 
         return this;
     }
@@ -166,9 +174,98 @@ public class TransactionBuilder {
     }
      */
 
-    public Transaction build(){
-        return new Transaction();
+    public Transaction build(boolean performChecks) throws TransactionException {
+        if (performChecks){
+            runTransactionChecks();
+        }
+
+       return new Transaction();
+
     }
+
+    private void runTransactionChecks() throws TransactionException {
+        if (invalidSatoshis()) {
+            throw new TransactionException("Invalid quantity of satoshis");
+        }
+
+        BigInteger unspent = getUnspentValue();
+        if (unspent.compareTo(BigInteger.ZERO) == -1) {
+            if (!transactionOptions.contains(TransactionOption.DISABLE_MORE_OUTPUT_THAN_INPUT)) {
+                throw new TransactionException("Invalid output sum of satoshis");
+            }
+        } else {
+            checkForFeeErrors(unspent);
+        }
+
+        checkForDustErrors();
+        //TODO: This might be a useful check, but can't be done in Builder
+        //checkForMissingSignatures();
+
+    }
+
+//    private void checkForMissingSignatures(){
+//        if (transactionOptions.contains(TransactionOption.DISABLE_FULLY_SIGNED)) return;
+//
+//        if (!isFullySigned()) {
+//            throw new TransactionException("Missing Signatures");
+//        }
+//    }
+
+
+    private void checkForDustErrors() throws TransactionException {
+        if (transactionOptions.contains(TransactionOption.DISABLE_DUST_OUTPUTS)) {
+            return;
+        }
+
+        for (TransactionOutput output : outputs) {
+            if (output.getAmount().compareTo(DUST_AMOUNT) == -1 ) {
+                throw new TransactionException("You have outputs with spending values below the dust limit of " + DUST_AMOUNT.toString());
+            }
+        }
+    }
+
+
+    private void checkForFeeErrors(BigInteger unspent) throws TransactionException {
+        if ((transactionFee != null) && (transactionFee.compareTo(unspent) != 0)) {
+            String errorMessage = "Unspent value is " + unspent.toString(10) + " but specified fee is " + transactionFee.toString(10);
+            throw new TransactionException(errorMessage);
+        }
+
+        if (!transactionOptions.contains(TransactionOption.DISABLE_LARGE_FEES)) {
+            BigInteger maximumFee = FEE_SECURITY_MARGIN.multiply(estimateFee());
+            if (unspent.compareTo(maximumFee) == 1) {
+                if (!changeScriptFlag) {
+                    throw new TransactionException("Fee is too large and no change address was provided");
+                }
+
+                throw new TransactionException("expected less than " + maximumFee.toString() + " but got " + unspent.toString());
+            }
+        }
+    }
+
+    private BigInteger getUnspentValue(){
+
+        BigInteger inputAmount = calcInputTotals();
+        BigInteger outputAmount = calcRecipientTotals();
+        BigInteger unspent = inputAmount.subtract(outputAmount);
+
+        return unspent;
+    }
+
+    private boolean invalidSatoshis() {
+        for (TransactionOutput output: outputs){
+            //    if (this._satoshis > MAX_SAFE_INTEGER) {
+            if (output.getAmount().compareTo(BigInteger.ZERO) == -1)
+                return true;
+
+            //can't spend more than the total moneysupply of Bitcoin
+            if (output.getAmount().compareTo(BigInteger.valueOf(Transaction.MAX_MONEY)) == 1)
+                return true;
+        }
+
+        return false;
+    }
+
 
     private void updateChangeOutput(){
         //spent amount equals input amount. No change generated. Return.

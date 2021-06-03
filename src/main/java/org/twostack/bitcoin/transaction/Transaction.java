@@ -1,8 +1,10 @@
 package org.twostack.bitcoin.transaction;
 
+import com.google.common.math.LongMath;
 import org.twostack.bitcoin.Sha256Hash;
 import org.twostack.bitcoin.Utils;
 import org.twostack.bitcoin.VarInt;
+import org.twostack.bitcoin.exception.TransactionException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -10,11 +12,10 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 public class Transaction {
+
 
     private long version;
     private long nLockTime = 0;
@@ -22,18 +23,27 @@ public class Transaction {
     private ArrayList<TransactionOutput> outputs = new ArrayList<>();
 
     /// Max value for an unsigned 32 bit value
-    static final long NLOCKTIME_MAX_VALUE = 4294967295L;
+    public static final long NLOCKTIME_MAX_VALUE = 4294967295L;
+
+    public static final long MAX_COINS = 21000000;
+    /// max amount of satoshis in circulation
+
+    private static final int SMALLEST_UNIT_EXPONENT = 8;
+    private static final long COIN_VALUE = LongMath.pow(10, SMALLEST_UNIT_EXPONENT);
+
+    public static final long MAX_MONEY = LongMath.checkedMultiply(COIN_VALUE, MAX_COINS);
 
     /** Threshold for lockTime: below this value it is interpreted as block number, otherwise as timestamp. **/
     public static final int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
 
-    /** FIXME: Same but as a BigInteger for CHECKLOCKTIMEVERIFY */
+    /** TODO: Same but as a BigInteger for CHECKLOCKTIMEVERIFY */
     public static final BigInteger LOCKTIME_THRESHOLD_BIG = BigInteger.valueOf(LOCKTIME_THRESHOLD);
 
     /** How many bytes a transaction can be before it won't be relayed anymore. Currently 100kb. */
     public static final int MAX_STANDARD_TX_SIZE = 100000;
 
     private ByteBuffer txHash;
+
 
     public Transaction(){
 
@@ -75,30 +85,14 @@ public class Transaction {
         sizeTxOuts = reader.readVarInt().intValue();
         for (i = 0; i < sizeTxOuts; i++) {
             TransactionOutput output = TransactionOutput.fromReader(reader);
-            output.setOutputIndex(i);
+//            output.setOutputIndex(i); //FIXME: What are implications of tracking output index elsewhere ?
             outputs.add(output);
         }
 
         nLockTime = reader.readUint32();
     }
 
-    public String getTransactionId(){
-        if (txHash == null){
-            return "";
-        }
-
-        return Utils.HEX.encode(txHash.array());
-    }
-
-    public byte[] getTransactionIdBytes(){
-        if (txHash == null){
-            return new byte[]{};
-        }
-
-        return txHash.array();
-    }
-
-    String uncheckedSerialize() throws IOException {
+    byte[] serialize() throws IOException {
 
         ByteArrayOutputStream os = new ByteArrayOutputStream();
 
@@ -134,7 +128,7 @@ public class Transaction {
         // write the locktime
         Utils.uint32ToByteStreamLE(nLockTime, os);
 
-        return Utils.HEX.encode(os.toByteArray());
+        return os.toByteArray();
     }
 
 
@@ -143,9 +137,57 @@ public class Transaction {
         return Collections.unmodifiableList(inputs);
     }
 
+    public void replaceOutput(int index, TransactionOutput txout) {
+        outputs.set(index, txout);
+    }
+
+    public TransactionInput replaceInput(int index, TransactionInput input){
+        return inputs.set(index, input);
+    }
+
+    public void clearInputs() {
+        inputs.clear();
+    }
+
+    public void clearOutputs() {
+        outputs.clear();
+    }
+
     /** Returns an unmodifiable view of all outputs. */
     public List<TransactionOutput> getOutputs() {
         return Collections.unmodifiableList(outputs);
+    }
+
+    public String getTransactionId(){
+        if (txHash == null){
+            return "";
+        }
+
+        return Utils.HEX.encode(txHash.array());
+    }
+
+    public byte[] getTransactionIdBytes(){
+        if (txHash == null){
+            return new byte[]{};
+        }
+
+        return txHash.array();
+    }
+
+    public void addOutput(TransactionOutput output) {
+        outputs.add(output);
+    }
+
+    public void addInput(TransactionInput input) {
+        inputs.add(input);
+    }
+
+    public long getVersion() {
+        return version;
+    }
+
+    public long getnLockTime() {
+        return nLockTime;
     }
 
 }
