@@ -21,6 +21,7 @@ import org.junit.Test;
 import org.twostack.bitcoin.PrivateKey;
 import org.twostack.bitcoin.address.Address;
 import org.twostack.bitcoin.exception.InvalidKeyException;
+import org.twostack.bitcoin.exception.TransactionException;
 import org.twostack.bitcoin.params.NetworkAddressType;
 
 import java.io.IOException;
@@ -49,7 +50,7 @@ public class TransactionTest {
     }
 
     @Test
-    public void can_create_and_sign_transaction() throws InvalidKeyException {
+    public void can_create_and_sign_transaction() throws InvalidKeyException, TransactionException {
 
         PrivateKey privateKey = PrivateKey.fromWIF("cVVvUsNHhbrgd7aW3gnuGo2qJM45LhHhTCVXrDSJDDcNGE6qmyCs");
         Address changeAddress = Address.fromString(NetworkAddressType.TEST_PKH, "mu4DpTaD75nheE4z5CQazqm1ivej1vzL4L"); // my address
@@ -61,12 +62,11 @@ public class TransactionTest {
 
         //Let's create the set of Spending Transaction Inputs. These Transaction Inputs need to refer to the Outputs in
         //the Transaction we are spending from.
-        TransactionOutput utxo = txWithUTXO.getOutputs().get(0); //looking at the decoded JSON we can see that our UTXO in at vout[0]
-//
+
         P2PKHLockBuilder locker = new P2PKHLockBuilder(recipientAddress);
         P2PKHUnlockBuilder unlocker = new P2PKHUnlockBuilder(privateKey.getPublicKey());
         Transaction txn = new TransactionBuilder()
-         .spendFromOutput(utxo, Transaction.NLOCKTIME_MAX_VALUE, unlocker) //set global sequenceNumber/nLocktime time for each Input created
+         .spendFromTransaction(txWithUTXO, 0, Transaction.NLOCKTIME_MAX_VALUE, unlocker) //set global sequenceNumber/nLocktime time for each Input created
          .spendTo(recipientAddress, BigInteger.valueOf(50000000L), locker) //spend half of a bitcoin (we should have 1 in the UTXO)
          .sendChangeTo(changeAddress, locker) // spend change to myself
          .withFeePerKb(100000)

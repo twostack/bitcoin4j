@@ -19,15 +19,17 @@ public class TransactionInput {
 
     private byte[] _prevTxnId = new byte[32];
 
-    private BigInteger _spendingAmount;
-
     private Script _scriptSig;
 
-    public TransactionInput(byte[] prevTxnId, long prevTxnOutputIndex, Script scriptSig, long sequenceNumber){
+    private UnlockingScriptBuilder _unlockingScriptBuilder;
+
+    public TransactionInput(byte[] prevTxnId, long prevTxnOutputIndex, long sequenceNumber, UnlockingScriptBuilder unlocker){
         _prevTxnId = prevTxnId;
         _prevTxnOutputIndex = prevTxnOutputIndex;
-        _scriptSig = scriptSig;
+//        _scriptSig = unlocker.getScriptSig();
         _sequenceNumber = sequenceNumber;
+        _unlockingScriptBuilder = unlocker;
+
     }
 
     public static TransactionInput fromReader(ReadUtils reader){
@@ -41,7 +43,7 @@ public class TransactionInput {
         Script scriptSig = new Script(reader.readBytes(scriptLength));
         long sequenceNumber = reader.readUint32();
 
-        return new TransactionInput(prevTxnId, prevTxnOutputIndex, scriptSig, sequenceNumber);
+        return new TransactionInput(prevTxnId, prevTxnOutputIndex, sequenceNumber, new DefaultUnlockBuilder());
 
     }
 
@@ -68,5 +70,21 @@ public class TransactionInput {
         wu.writeUint32LE(_sequenceNumber);
 
         return wu.getBytes();
+    }
+
+    public long getSequenceNumber() {
+        return _sequenceNumber;
+    }
+
+    public long getPrevTxnOutputIndex() {
+        return _prevTxnOutputIndex;
+    }
+
+    public byte[] getPrevTxnId() {
+        return _prevTxnId;
+    }
+
+    public Script getScriptSig() {
+        return _unlockingScriptBuilder.getScriptSig();
     }
 }

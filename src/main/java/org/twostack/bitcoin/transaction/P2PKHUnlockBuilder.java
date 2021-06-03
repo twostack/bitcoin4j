@@ -42,7 +42,12 @@ public class P2PKHUnlockBuilder extends UnlockingScriptBuilder {
     @Override
     public Script getScriptSig() {
 
-        TransactionSignature signature = getSignatures().get(0);
+        List<TransactionSignature> signatures = getSignatures();
+
+        TransactionSignature signature = null;
+        if (!signatures.isEmpty()) {
+            signature = getSignatures().get(0);
+        }
 
         if (signature == null || signerPubkey == null){
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Missing signature or public key. scriptSig won't be created.");

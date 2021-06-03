@@ -11,8 +11,6 @@ public class TransactionOutput {
 
     private BigInteger satoshis = BigInteger.ZERO;
 
-
-    private String transactionId;
     private int outputIndex;
 
     private Script script;
@@ -70,11 +68,14 @@ public class TransactionOutput {
         this.outputIndex = outputIndex;
     }
 
-    public String getTransactionId() {
-        return transactionId;
+    public Script getScript() {
+        return script;
     }
 
-    public void setTransactionId(String transactionId) {
-        this.transactionId = transactionId;
+    public BigInteger getAmount() {
+        return satoshis;
+    }
+    public void setAmount(BigInteger amount) {
+        this.satoshis = amount;
     }
 }

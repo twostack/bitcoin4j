@@ -76,7 +76,6 @@ public class Transaction {
         for (i = 0; i < sizeTxOuts; i++) {
             TransactionOutput output = TransactionOutput.fromReader(reader);
             output.setOutputIndex(i);
-            output.setTransactionId(getTransactionId());
             outputs.add(output);
         }
 
@@ -91,6 +90,13 @@ public class Transaction {
         return Utils.HEX.encode(txHash.array());
     }
 
+    public byte[] getTransactionIdBytes(){
+        if (txHash == null){
+            return new byte[]{};
+        }
+
+        return txHash.array();
+    }
 
     String uncheckedSerialize() throws IOException {
 
@@ -141,6 +147,5 @@ public class Transaction {
     public List<TransactionOutput> getOutputs() {
         return Collections.unmodifiableList(outputs);
     }
-
 
 }
