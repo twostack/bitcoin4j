@@ -41,6 +41,8 @@ public class TransactionBuilder {
     static final int MAXIMUM_EXTRA_SIZE = 4 + 9 + 9 + 4;
     static final int SCRIPT_MAX_SIZE = 149;
 
+    private long nLockTime = 0;
+
 
     public TransactionBuilder spendFromTransaction(Transaction txn, int outputIndex, long sequenceNumber, P2PKHUnlockBuilder unlocker){
 
@@ -179,7 +181,17 @@ public class TransactionBuilder {
             runTransactionChecks();
         }
 
-       return new Transaction();
+        Transaction tx = new Transaction();
+
+        //add transaction inputs
+        tx.addInputs(inputs);
+
+        //add transaction outputs
+        tx.addOutputs(outputs);
+
+        tx.setLockTime(nLockTime);
+
+        return tx;
 
     }
 
@@ -332,9 +344,9 @@ public class TransactionBuilder {
     private BigInteger calcInputTotals(){
 
         BigInteger amount = BigInteger.ZERO;
-        spendingMap.forEach((key, value) -> {
-            amount.add(value);
-        });
+        for (BigInteger value : spendingMap.values()) {
+            amount = amount.add(value);
+        }
 
         return amount;
     }
@@ -343,7 +355,7 @@ public class TransactionBuilder {
 
         BigInteger amount = BigInteger.ZERO;
         for (TransactionOutput output: outputs) {
-            amount.add(output.getAmount());
+            amount = amount.add(output.getAmount());
         };
 
         return amount;

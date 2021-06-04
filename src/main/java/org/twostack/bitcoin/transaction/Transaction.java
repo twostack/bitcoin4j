@@ -186,8 +186,19 @@ public class Transaction {
         return version;
     }
 
-    public long getnLockTime() {
+    public long getLockTime() {
         return nLockTime;
     }
 
+    public void setLockTime(long nLockTime) {
+        this.nLockTime = nLockTime;
+    }
+
+    public void addInputs(List<TransactionInput> inputs) {
+        this.inputs.addAll(inputs);
+    }
+
+    public void addOutputs(List<TransactionOutput> outputs) {
+        this.outputs.addAll(outputs);
+    }
 }

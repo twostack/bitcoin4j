@@ -21,14 +21,13 @@ public class TransactionSigner {
         //FIXME: This is a test work-around for why I can't sign an unsigned raw txn
         //FIXME: This assumes we're signing P2PKH
 
-        TransactionInput input = unsignedTxn.getInputs().get(inputIndex);
 
         //FIXME: This should account for ANYONECANPAY mask that limits outputs to sign over
         ///      NOTE: Stripping Subscript should be done inside SIGHASH class
         Script subscript = utxo.getScript(); //scriptSig FIXME: WTF !? Sighash should fail on this
         SigHash sigHash = new SigHash();
 
-        //NOTE: Return hash in LittleEndian
+        //NOTE: Return hash in LittleEndian (already double-sha256 applied)
         byte[] hash = sigHash.createHash(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
 
         //FIXME: Revisit this issue surrounding the need to sign a reversed copy of the hash.
@@ -36,8 +35,11 @@ public class TransactionSigner {
         //       var reversedHash = Utils.HEX.encode(HEX.decode(hash).reversed.toList());
 
         // generate a signature for the input
+        // TransactionSignature is just a thin wrapper over our signature to assert
+        // type safety during serializing of our TransactionOutput
         TransactionSignature sig = new TransactionSignature(signingKey.sign(hash));
 
+        TransactionInput input = unsignedTxn.getInputs().get(inputIndex);
         UnlockingScriptBuilder scriptBuilder = input.getUnlockingScriptBuilder();
 
         if (scriptBuilder != null) {

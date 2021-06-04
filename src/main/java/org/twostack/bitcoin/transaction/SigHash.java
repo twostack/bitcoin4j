@@ -237,7 +237,7 @@ public class SigHash {
         writer.writeBytes(hashOutputs, hashOutputs.length);
 
         // Locktime
-        writer.writeUint32LE(txnCopy.getnLockTime());
+        writer.writeUint32LE(txnCopy.getLockTime());
 
         // sighashType
         writer.writeUint32LE(sigHashType >> 0);
