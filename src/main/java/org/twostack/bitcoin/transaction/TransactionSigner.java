@@ -1,6 +1,7 @@
 package org.twostack.bitcoin.transaction;
 
 import org.twostack.bitcoin.PrivateKey;
+import org.twostack.bitcoin.Sha256Hash;
 import org.twostack.bitcoin.Utils;
 import org.twostack.bitcoin.exception.SigHashException;
 import org.twostack.bitcoin.exception.TransactionException;
@@ -15,7 +16,7 @@ public class TransactionSigner {
             TransactionOutput utxo,
             int inputIndex,
             PrivateKey signingKey,
-            int sigHashFlags) throws TransactionException, IOException, SigHashException {
+            int sigHashType) throws TransactionException, IOException, SigHashException {
 
         //FIXME: This is a test work-around for why I can't sign an unsigned raw txn
         //FIXME: This assumes we're signing P2PKH
@@ -28,16 +29,14 @@ public class TransactionSigner {
         SigHash sigHash = new SigHash();
 
         //NOTE: Return hash in LittleEndian
-        byte[] hash = sigHash.createHash(unsignedTxn, sigHashFlags, inputIndex, subscript, utxo.getAmount());
+        byte[] hash = sigHash.createHash(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
 
         //FIXME: Revisit this issue surrounding the need to sign a reversed copy of the hash.
         ///      Right now I've factored this out of signature.dart because 'coupling' & 'seperation of concerns'.
-//        var reversedHash = Utils.HEX.encode(HEX.decode(hash).reversed.toList());
+        //       var reversedHash = Utils.HEX.encode(HEX.decode(hash).reversed.toList());
 
         // generate a signature for the input
-        TransactionSignature sig = TransactionSignature.fromPrivateKey(signingKey);
-        sig.setHashType(sigHashFlags);
-        sig.createSignature(hash);
+        TransactionSignature sig = new TransactionSignature(signingKey.sign(hash));
 
         UnlockingScriptBuilder scriptBuilder = input.getUnlockingScriptBuilder();
 

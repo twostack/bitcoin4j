@@ -21,6 +21,7 @@ import org.junit.Test;
 import org.twostack.bitcoin.PrivateKey;
 import org.twostack.bitcoin.address.Address;
 import org.twostack.bitcoin.exception.InvalidKeyException;
+import org.twostack.bitcoin.exception.SigHashException;
 import org.twostack.bitcoin.exception.TransactionException;
 import org.twostack.bitcoin.params.NetworkAddressType;
 
@@ -46,11 +47,11 @@ public class TransactionTest {
     @Test
     public void TestSerializeDeserialize() throws IOException {
         Transaction transaction = Transaction.fromHex(tx1hex);
-        assertEquals(tx1hex, transaction.uncheckedSerialize());
+        assertEquals(tx1hex, transaction.serialize());
     }
 
     @Test
-    public void can_create_and_sign_transaction() throws InvalidKeyException, TransactionException {
+    public void can_create_and_sign_transaction() throws InvalidKeyException, TransactionException, IOException, SigHashException {
 
         PrivateKey privateKey = PrivateKey.fromWIF("cVVvUsNHhbrgd7aW3gnuGo2qJM45LhHhTCVXrDSJDDcNGE6qmyCs");
         Address changeAddress = Address.fromString(NetworkAddressType.TEST_PKH, "mu4DpTaD75nheE4z5CQazqm1ivej1vzL4L"); // my address
@@ -70,10 +71,10 @@ public class TransactionTest {
          .spendTo(recipientAddress, BigInteger.valueOf(50000000L), locker) //spend half of a bitcoin (we should have 1 in the UTXO)
          .sendChangeTo(changeAddress, locker) // spend change to myself
          .withFeePerKb(100000)
-         .build();
+         .build(false);
 
          TransactionOutput utxoToSign = txWithUTXO.getOutputs().get(0);
-         Transaction signedTx = new TransactionSigner().sign(unsignedTxn, utxoToSign,0, privateKey, SigHashType.ALL.byteValue() | SigHashType.FORKID.byteValue());
+         Transaction signedTx = new TransactionSigner().sign(unsignedTxn, utxoToSign,0, privateKey, SigHashType.ALL.value | SigHashType.FORKID.value);
 //
 //        //Sign the Transaction Input
 //

@@ -248,7 +248,7 @@ public class SigHash {
 
 
     private byte[] getHash(Transaction txn) throws IOException {
-        byte[] txnBytes= txn.serialize(false); //our copy of
+        byte[] txnBytes= txn.serialize(); //our copy of
 
         WriteUtils writer = new WriteUtils();
         writer.writeBytes(txnBytes, txnBytes.length);

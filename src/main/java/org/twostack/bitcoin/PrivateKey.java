@@ -24,6 +24,11 @@ public class PrivateKey {
         this._networkType = networkType;
     }
 
+    public byte[] sign(byte[] buffer){
+        ECKey.ECDSASignature sig = this.key.sign(Sha256Hash.wrap(buffer)) ;
+        return sig.encodeToDER();
+    }
+
     public static PrivateKey fromWIF(String wif) throws InvalidKeyException {
 
         boolean isCompressed = false;

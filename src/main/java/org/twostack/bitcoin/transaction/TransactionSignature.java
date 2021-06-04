@@ -4,13 +4,17 @@ import org.twostack.bitcoin.Utils;
 
 public class TransactionSignature {
 
-    byte[] signatureBytes;
 
-    private TransactionSignature(byte[] sigBytes){
+    private byte[] signatureBytes;
+
+    public TransactionSignature(byte[] sigBytes){
         this.signatureBytes = sigBytes;
     }
     public static TransactionSignature fromTxFormat(String encode) {
-
         return new TransactionSignature(Utils.HEX.decode(encode));
+    }
+
+    public byte[] getSignatureBytes() {
+        return signatureBytes;
     }
 }
