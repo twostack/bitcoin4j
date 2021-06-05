@@ -8,10 +8,11 @@ import java.math.BigInteger;
 
 public class TransactionInput {
 
-    /// Maximum size an unsigned int can be. Used as value of [sequenceNumber] when we
-    /// want to indicate that the transaction's [Transaction.nLockTime] should be ignored.
+    /*
+        Maximum size an unsigned int can be. Used as value of [sequenceNumber] when we
+        want to indicate that the transaction's [Transaction.nLockTime] should be ignored.
+     */
     static int UINT_MAX =  0xFFFFFFFF;
-//    private Boolean _isSignedInput = false;
 
     private long _sequenceNumber;
 

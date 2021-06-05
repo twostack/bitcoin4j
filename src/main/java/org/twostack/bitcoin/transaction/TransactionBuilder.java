@@ -1,5 +1,6 @@
 package org.twostack.bitcoin.transaction;
 
+import org.twostack.bitcoin.Utils;
 import org.twostack.bitcoin.address.Address;
 import org.twostack.bitcoin.exception.TransactionException;
 import org.twostack.bitcoin.script.Script;
@@ -7,6 +8,8 @@ import org.twostack.bitcoin.script.Script;
 import javax.annotation.Nullable;
 import java.math.BigInteger;
 import java.util.*;
+
+import static org.twostack.bitcoin.Utils.HEX;
 
 public class TransactionBuilder {
 
@@ -43,6 +46,38 @@ public class TransactionBuilder {
 
     private long nLockTime = 0;
 
+    /*
+        utxoMap is expect to have :
+
+        {
+            "transactionId" : [String],
+            "satoshis", [int],
+            "sequenceNumber", [long],
+            "outputIndex", [int],
+            "scriptPubKey", [String]
+        }
+     */
+    public TransactionBuilder spendFromUtxoMap(Map<String, Object> utxoMap) {
+
+        int outputIndex = (int ) utxoMap.get("outputIndex");
+        long sequenceNumber = (long) utxoMap.get("sequenceNumber");
+        Script scriptPubKey = new Script(HEX.decode((String) utxoMap.get("scriptPubKey")));
+        P2PKHUnlockBuilder unlocker = new P2PKHUnlockBuilder(scriptPubKey);
+
+        TransactionInput input = new TransactionInput(
+                HEX.decode((String)utxoMap.get("transactionId")),
+                outputIndex,
+                sequenceNumber,
+                unlocker
+        );
+
+        spendingMap.put((String) utxoMap.get("transactionId"), new BigInteger((String) utxoMap.get("satoshis"), 10));
+
+        inputs.add(input);
+
+        return this;
+
+    }
 
     public TransactionBuilder spendFromTransaction(Transaction txn, int outputIndex, long sequenceNumber, P2PKHUnlockBuilder unlocker){
 
@@ -73,7 +108,7 @@ public class TransactionBuilder {
 //        return this;
 //    }
 
-    public TransactionBuilder spendTo(Address recipientAddress, BigInteger satoshis, @Nullable LockingScriptBuilder locker) throws TransactionException{
+    public TransactionBuilder spendTo(LockingScriptBuilder locker, BigInteger satoshis) throws TransactionException{
 
         int satoshiCompare = satoshis.compareTo(BigInteger.ZERO);
         if (satoshiCompare == -1 ||  satoshiCompare == 0) //equivalent of satoshis <= 0
@@ -81,7 +116,7 @@ public class TransactionBuilder {
 
         Script script;
         if (locker == null) {
-            script = new P2PKHLockBuilder(recipientAddress).getScriptPubkey();
+            throw new TransactionException("LockingScriptBuilder cannot be null");
         }else{
            script = locker.getScriptPubkey();
         }
@@ -360,4 +395,5 @@ public class TransactionBuilder {
 
         return amount;
     }
+
 }

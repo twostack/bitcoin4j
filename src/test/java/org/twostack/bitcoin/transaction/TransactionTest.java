@@ -17,18 +17,36 @@
 
 package org.twostack.bitcoin.transaction;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.primitives.UnsignedInteger;
+import org.assertj.core.api.Assertions;
 import org.junit.Test;
 import org.twostack.bitcoin.PrivateKey;
 import org.twostack.bitcoin.address.Address;
+import org.twostack.bitcoin.address.LegacyAddress;
 import org.twostack.bitcoin.exception.InvalidKeyException;
 import org.twostack.bitcoin.exception.SigHashException;
 import org.twostack.bitcoin.exception.TransactionException;
 import org.twostack.bitcoin.params.NetworkAddressType;
+import org.twostack.bitcoin.script.Script;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.twostack.bitcoin.Utils.HEX;
 
 /**
  * Just check the Transaction.verify() method. Most methods that have complicated logic in Transaction are tested
@@ -68,17 +86,94 @@ public class TransactionTest {
         P2PKHUnlockBuilder unlocker = new P2PKHUnlockBuilder(privateKey.getPublicKey());
         Transaction unsignedTxn = new TransactionBuilder()
          .spendFromTransaction(txWithUTXO, 0, Transaction.NLOCKTIME_MAX_VALUE, unlocker) //set global sequenceNumber/nLocktime time for each Input created
-         .spendTo(recipientAddress, BigInteger.valueOf(50000000L), locker) //spend half of a bitcoin (we should have 1 in the UTXO)
+         .spendTo(locker, BigInteger.valueOf(50000000L)) //spend half of a bitcoin (we should have 1 in the UTXO)
          .sendChangeTo(changeAddress, locker) // spend change to myself
          .withFeePerKb(100000)
          .build(false);
 
          TransactionOutput utxoToSign = txWithUTXO.getOutputs().get(0);
-         Transaction signedTx = new TransactionSigner().sign(unsignedTxn, utxoToSign,0, privateKey, SigHashType.ALL.value | SigHashType.FORKID.value);
-//
-//        //Sign the Transaction Input
-//
-//        //FIXME: Where's the assertion ?
-//
+
+         //simply check that we have clean e2e execution
+         Assertions.assertThatCode(() -> {
+             new TransactionSigner().sign(unsignedTxn, utxoToSign,0, privateKey, SigHashType.ALL.value | SigHashType.FORKID.value);
+         }).doesNotThrowAnyException();
+
+        //System.out.println(HEX.encode(signedTx.serialize()));
+    }
+
+    @Test
+    public void test_transaction_serialization_vectors() throws IOException, TransactionException, InvalidKeyException, SigHashException {
+
+        JsonNode json = new ObjectMapper().readTree(
+                new InputStreamReader(getClass().getResourceAsStream("tx_creation.json"),
+                StandardCharsets.UTF_8)
+        );
+
+        for (JsonNode test : json) {
+//            if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
+//                continue; // This is a comment.
+            Transaction transaction = null;
+
+            ArrayNode fromNode = (ArrayNode) test.get("from");
+            ArrayNode toNodes = (ArrayNode) test.get("to");
+            ArrayNode signatureNode = (ArrayNode) test.get("sign");
+            TextNode  serializedTxNode = (TextNode) test.get("serialize");
+
+            //get utxo deets
+            ObjectNode fromObj = (ObjectNode) fromNode.get(0).get(0);
+            String address = ((TextNode)fromObj.get("address")).textValue();
+            String txId = ((TextNode)fromObj.get("txId")).textValue();
+            int outputIndex = ((IntNode)fromObj.get("outputIndex")).asInt();
+            String scriptPubKeyText = ((TextNode)fromObj.get("scriptPubKey")).textValue();
+            Script scriptPubKey = new Script(HEX.decode(scriptPubKeyText));
+            int satoshis = ((IntNode)fromObj.get("satoshis")).asInt();
+
+            Map<String, Object> utxoMap = new HashMap<>();
+            utxoMap.put("transactionId", txId);
+            utxoMap.put("satoshis", satoshis);
+            utxoMap.put("sequenceNumber", TransactionInput.UINT_MAX);
+            utxoMap.put("outputIndex", outputIndex);
+            utxoMap.put("scriptPubKey", scriptPubKeyText);
+
+            //Build the Transaction
+            TransactionBuilder builder = new TransactionBuilder();
+
+            //get txout
+            //FIXME: iterate over all outputs
+//            ObjectNode txOutNode = (ObjectNode) toNode.get(0);
+            for (JsonNode txOutNode: toNodes){
+                String toAddress = txOutNode.get(0).textValue();
+                int spendAmount = txOutNode.get(0).asInt();
+
+                builder.spendTo(new P2PKHLockBuilder(LegacyAddress.fromString(NetworkAddressType.MAIN_PKH, toAddress)) , BigInteger.valueOf(spendAmount));
+            }
+
+            //signature
+            String privateKey = signatureNode.get(0).asText();
+            int sighashType = signatureNode.get(0).asInt();
+
+            //txHex
+            String serializedTx = serializedTxNode.asText();
+
+
+            builder.spendFromUtxoMap(utxoMap);
+            builder.withFeePerKb(100000);
+
+            Transaction tx = builder.build(false);
+
+            TransactionSigner signer = new TransactionSigner();
+            signer.sign(
+                    tx,
+                    new TransactionOutput(BigInteger.valueOf(satoshis),
+                    scriptPubKey),
+                    0,
+                    PrivateKey.fromWIF(privateKey),
+                    sighashType);
+
+            assertEquals(HEX.encode(tx.serialize()), serializedTx);
+
+
+        }
+
     }
 }
