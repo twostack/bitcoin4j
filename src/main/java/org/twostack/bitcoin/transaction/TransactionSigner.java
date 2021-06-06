@@ -37,7 +37,7 @@ public class TransactionSigner {
         // generate a signature for the input
         // TransactionSignature is just a thin wrapper over our signature to assert
         // type safety during serializing of our TransactionOutput
-        TransactionSignature sig = new TransactionSignature(signingKey.sign(hash));
+        TransactionSignature sig = new TransactionSignature(signingKey.sign(hash), sigHashType);
 
         TransactionInput input = unsignedTxn.getInputs().get(inputIndex);
         UnlockingScriptBuilder scriptBuilder = input.getUnlockingScriptBuilder();

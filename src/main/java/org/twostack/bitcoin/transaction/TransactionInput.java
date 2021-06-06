@@ -1,5 +1,6 @@
 package org.twostack.bitcoin.transaction;
 
+import org.twostack.bitcoin.Utils;
 import org.twostack.bitcoin.VarInt;
 import org.twostack.bitcoin.script.Script;
 
@@ -13,7 +14,7 @@ public class TransactionInput {
         want to indicate that the transaction's [Transaction.nLockTime] should be ignored.
         This is a 64-bit value, in range 0 to (2^64) - 1
      */
-    static long ULONG_MAX =  0xFFFFFFFF;
+    static long MAX_SEQ_NUMBER =  0xFFFFFFFF;
 
     private long _sequenceNumber;
 
@@ -33,7 +34,7 @@ public class TransactionInput {
 
     public static TransactionInput fromReader(ReadUtils reader){
 
-        byte[] prevTxnId = reader.readBytes(32); //FIXME: Reverse this to get LE
+        byte[] prevTxnId = Utils.reverseBytes(reader.readBytes(32));
         long prevTxnOutputIndex = reader.readUint32();
 
         VarInt vi = reader.readVarInt();
@@ -57,7 +58,7 @@ public class TransactionInput {
 
         WriteUtils wu = new WriteUtils();
 
-        wu.writeBytes(_prevTxnId, 32);
+        wu.writeBytes(Utils.reverseBytes(_prevTxnId), 32);
         wu.writeUint32LE(_prevTxnOutputIndex);
 
         byte[] scriptBytes = _unlockingScriptBuilder.getScriptSig().getProgram();

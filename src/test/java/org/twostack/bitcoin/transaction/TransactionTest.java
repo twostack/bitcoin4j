@@ -23,7 +23,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import com.google.common.primitives.UnsignedInteger;
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 import org.twostack.bitcoin.PrivateKey;
@@ -36,13 +35,11 @@ import org.twostack.bitcoin.params.NetworkAddressType;
 import org.twostack.bitcoin.script.Script;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -131,7 +128,7 @@ public class TransactionTest {
             Map<String, Object> utxoMap = new HashMap<>();
             utxoMap.put("transactionId", txId);
             utxoMap.put("satoshis", BigInteger.valueOf(satoshis));
-            utxoMap.put("sequenceNumber", TransactionInput.ULONG_MAX);
+            utxoMap.put("sequenceNumber", TransactionInput.MAX_SEQ_NUMBER);
             utxoMap.put("outputIndex", outputIndex);
             utxoMap.put("scriptPubKey", scriptPubKeyText);
 
@@ -151,7 +148,7 @@ public class TransactionTest {
             //signature
             String privateKeyWiF = privateKeyNode.get(0).asText();
             PrivateKey privateKey = PrivateKey.fromWIF(privateKeyWiF);
-            int sighashType = privateKeyNode.get(0).asInt();
+            int sighashType = privateKeyNode.get(1).asInt();
 
             //txHex
             String serializedTx = serializedTxNode.asText();

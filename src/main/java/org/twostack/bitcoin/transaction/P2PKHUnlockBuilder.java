@@ -53,6 +53,13 @@ public class P2PKHUnlockBuilder extends UnlockingScriptBuilder {
             return new ScriptBuilder().build(); //return empty script; otherwise we will barf on early serialize (prior to signing)
         }
 
-        return new ScriptBuilder().data(signature.getSignatureBytes()).data(signerPubkey.getPubKeyBytes()).build();
+        try {
+
+            return new ScriptBuilder().data(signature.toTxFormat()).data(signerPubkey.getPubKeyBytes()).build();
+        }catch(Exception ex){
+            System.out.println(ex.getMessage());
+            ex.printStackTrace(); //FIXME: Handle more gracefully
+            return new ScriptBuilder().build();
+        }
     }
 }

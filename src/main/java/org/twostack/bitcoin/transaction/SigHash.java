@@ -253,7 +253,7 @@ public class SigHash {
         writer.writeBytes(txnBytes, txnBytes.length);
         writer.writeUint32LE(this._sigHashType);
 
-        return Sha256Hash.hashTwice(writer.getBytes()); //FIXME: Used to reverse this
+        return Sha256Hash.hashTwice(writer.getBytes());
     }
 
 

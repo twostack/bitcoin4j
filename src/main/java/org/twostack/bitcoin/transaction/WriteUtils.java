@@ -13,6 +13,10 @@ public class WriteUtils {
         bos.write(bytes, 0, length);
     }
 
+    public void writeUint8LE(int val) throws IOException{
+        bos.write((int) (0xFF & val));
+    }
+
     /** Write 2 bytes to the output stream as unsigned 16-bit integer in little endian format. */
     public void writeUint16LE(int val) throws IOException {
         bos.write((int) (0xFF & val));

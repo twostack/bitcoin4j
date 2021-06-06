@@ -17,7 +17,7 @@ import java.util.*;
 public class Transaction {
 
 
-    private long version;
+    private long version = 1;
     private long nLockTime = 0;
     private ArrayList<TransactionInput> inputs = new ArrayList<>();
     private ArrayList<TransactionOutput> outputs = new ArrayList<>();
@@ -106,7 +106,9 @@ public class Transaction {
         // write the inputs
         inputs.forEach( (input) ->  {
             try {
-                os.write(input.serialize());
+                byte[] buf = input.serialize();
+                os.write(buf);
+
             }catch(IOException ex){
                 System.out.println(ex.getMessage()); //FIXME: !!
             }
