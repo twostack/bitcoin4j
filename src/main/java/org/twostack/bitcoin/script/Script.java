@@ -229,7 +229,7 @@ public class Script {
                 _chunks.add(new ScriptChunk(opcodenum, data));
                 index = index + 3; //step by three
             } else {
-                _chunks.add(new ScriptChunk(opcodenum, new byte[]{}));
+                _chunks.add(new ScriptChunk(opcodenum, null));
                 index = index + 1; //step by one
             }
         }

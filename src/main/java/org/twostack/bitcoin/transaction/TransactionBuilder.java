@@ -51,18 +51,21 @@ public class TransactionBuilder {
 
         {
             "transactionId" : [String],
-            "satoshis", [int],
+            "satoshis", [BigInteger],
             "sequenceNumber", [long],
             "outputIndex", [int],
             "scriptPubKey", [String]
         }
      */
-    public TransactionBuilder spendFromUtxoMap(Map<String, Object> utxoMap) {
+    public TransactionBuilder spendFromUtxoMap(Map<String, Object> utxoMap, @Nullable  UnlockingScriptBuilder unlocker) {
 
         int outputIndex = (int ) utxoMap.get("outputIndex");
         long sequenceNumber = (long) utxoMap.get("sequenceNumber");
-        Script scriptPubKey = new Script(HEX.decode((String) utxoMap.get("scriptPubKey")));
-        P2PKHUnlockBuilder unlocker = new P2PKHUnlockBuilder(scriptPubKey);
+//        Script scriptPubKey = new Script(HEX.decode((String) utxoMap.get("scriptPubKey")));
+
+        if (unlocker == null){
+            unlocker = new DefaultUnlockBuilder();
+        }
 
         TransactionInput input = new TransactionInput(
                 HEX.decode((String)utxoMap.get("transactionId")),
@@ -71,7 +74,7 @@ public class TransactionBuilder {
                 unlocker
         );
 
-        spendingMap.put((String) utxoMap.get("transactionId"), new BigInteger((String) utxoMap.get("satoshis"), 10));
+        spendingMap.put((String) utxoMap.get("transactionId"), (BigInteger) utxoMap.get("satoshis"));
 
         inputs.add(input);
 
@@ -79,7 +82,7 @@ public class TransactionBuilder {
 
     }
 
-    public TransactionBuilder spendFromTransaction(Transaction txn, int outputIndex, long sequenceNumber, P2PKHUnlockBuilder unlocker){
+    public TransactionBuilder spendFromTransaction(Transaction txn, int outputIndex, long sequenceNumber, UnlockingScriptBuilder unlocker){
 
         TransactionInput input = new TransactionInput(
                 txn.getTransactionIdBytes(),
@@ -136,7 +139,8 @@ public class TransactionBuilder {
             changeScriptBuilder = locker;
         }
 
-        updateChangeOutput();
+        if (changeScriptBuilder != null)
+            updateChangeOutput();
 
         changeScriptFlag = true;
 
@@ -145,7 +149,10 @@ public class TransactionBuilder {
 
     public TransactionBuilder withFeePerKb(long fee){
         feePerKb = fee;
-        updateChangeOutput();
+
+        if (changeScriptBuilder != null)
+            updateChangeOutput();
+
         return this;
     }
     /*
@@ -324,7 +331,7 @@ public class TransactionBuilder {
     }
 
     private TransactionOutput getChangeOutput(){
-        if (changeOutput == null){
+        if (changeOutput == null ){
             changeOutput = new TransactionOutput(BigInteger.ZERO, changeScriptBuilder.getScriptPubkey());
         }
 

@@ -1,6 +1,5 @@
 package org.twostack.bitcoin.transaction;
 
-import com.sun.org.apache.xpath.internal.compiler.OpCodes;
 import org.twostack.bitcoin.Sha256Hash;
 import org.twostack.bitcoin.Utils;
 import org.twostack.bitcoin.VarInt;
@@ -13,6 +12,7 @@ import org.twostack.bitcoin.script.ScriptOpCodes;
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -52,8 +52,7 @@ public class SigHash {
         ///
         long flags = ENABLE_SIGHASH_FORKID;
 
-//        Transaction txnCopy = Transaction.fromHex(txn.serialize(performChecks: false)); //make a copy
-        Transaction txnCopy = unsignedTxn; //FIXME: need a clone ?
+        Transaction txnCopy = new Transaction(ByteBuffer.wrap(unsignedTxn.serialize()));
 
         Script subscriptCopy = new Script(subscript.getProgram()); //make a copy of subscript
 

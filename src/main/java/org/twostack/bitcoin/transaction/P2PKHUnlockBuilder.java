@@ -50,7 +50,7 @@ public class P2PKHUnlockBuilder extends UnlockingScriptBuilder {
         }
 
         if (signature == null || signerPubkey == null){
-            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Missing signature or public key. scriptSig won't be created.");
+            return new ScriptBuilder().build(); //return empty script; otherwise we will barf on early serialize (prior to signing)
         }
 
         return new ScriptBuilder().data(signature.getSignatureBytes()).data(signerPubkey.getPubKeyBytes()).build();

@@ -116,7 +116,7 @@ public class TransactionTest {
 
             ArrayNode fromNode = (ArrayNode) test.get("from");
             ArrayNode toNodes = (ArrayNode) test.get("to");
-            ArrayNode signatureNode = (ArrayNode) test.get("sign");
+            ArrayNode privateKeyNode = (ArrayNode) test.get("sign");
             TextNode  serializedTxNode = (TextNode) test.get("serialize");
 
             //get utxo deets
@@ -125,13 +125,13 @@ public class TransactionTest {
             String txId = ((TextNode)fromObj.get("txId")).textValue();
             int outputIndex = ((IntNode)fromObj.get("outputIndex")).asInt();
             String scriptPubKeyText = ((TextNode)fromObj.get("scriptPubKey")).textValue();
-            Script scriptPubKey = new Script(HEX.decode(scriptPubKeyText));
+            Script scriptPubKey = Script.fromByteArray(HEX.decode(scriptPubKeyText));
             int satoshis = ((IntNode)fromObj.get("satoshis")).asInt();
 
             Map<String, Object> utxoMap = new HashMap<>();
             utxoMap.put("transactionId", txId);
-            utxoMap.put("satoshis", satoshis);
-            utxoMap.put("sequenceNumber", TransactionInput.UINT_MAX);
+            utxoMap.put("satoshis", BigInteger.valueOf(satoshis));
+            utxoMap.put("sequenceNumber", TransactionInput.ULONG_MAX);
             utxoMap.put("outputIndex", outputIndex);
             utxoMap.put("scriptPubKey", scriptPubKeyText);
 
@@ -143,20 +143,21 @@ public class TransactionTest {
 //            ObjectNode txOutNode = (ObjectNode) toNode.get(0);
             for (JsonNode txOutNode: toNodes){
                 String toAddress = txOutNode.get(0).textValue();
-                int spendAmount = txOutNode.get(0).asInt();
+                int spendAmount = txOutNode.get(1).asInt();
 
                 builder.spendTo(new P2PKHLockBuilder(LegacyAddress.fromString(NetworkAddressType.MAIN_PKH, toAddress)) , BigInteger.valueOf(spendAmount));
             }
 
             //signature
-            String privateKey = signatureNode.get(0).asText();
-            int sighashType = signatureNode.get(0).asInt();
+            String privateKeyWiF = privateKeyNode.get(0).asText();
+            PrivateKey privateKey = PrivateKey.fromWIF(privateKeyWiF);
+            int sighashType = privateKeyNode.get(0).asInt();
 
             //txHex
             String serializedTx = serializedTxNode.asText();
 
 
-            builder.spendFromUtxoMap(utxoMap);
+            builder.spendFromUtxoMap(utxoMap, new P2PKHUnlockBuilder(privateKey.getPublicKey()));
             builder.withFeePerKb(100000);
 
             Transaction tx = builder.build(false);
@@ -164,13 +165,12 @@ public class TransactionTest {
             TransactionSigner signer = new TransactionSigner();
             signer.sign(
                     tx,
-                    new TransactionOutput(BigInteger.valueOf(satoshis),
-                    scriptPubKey),
+                    new TransactionOutput(BigInteger.valueOf(satoshis), scriptPubKey),
                     0,
-                    PrivateKey.fromWIF(privateKey),
+                    privateKey,
                     sighashType);
 
-            assertEquals(HEX.encode(tx.serialize()), serializedTx);
+            assertEquals(serializedTx, HEX.encode(tx.serialize()));
 
 
         }

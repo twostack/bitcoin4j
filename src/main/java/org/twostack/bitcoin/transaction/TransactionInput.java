@@ -9,10 +9,11 @@ import java.math.BigInteger;
 public class TransactionInput {
 
     /*
-        Maximum size an unsigned int can be. Used as value of [sequenceNumber] when we
+        Maximum size an unsigned long can be. Used as value of [sequenceNumber] when we
         want to indicate that the transaction's [Transaction.nLockTime] should be ignored.
+        This is a 64-bit value, in range 0 to (2^64) - 1
      */
-    static int UINT_MAX =  0xFFFFFFFF;
+    static long ULONG_MAX =  0xFFFFFFFF;
 
     private long _sequenceNumber;
 
@@ -25,7 +26,6 @@ public class TransactionInput {
     public TransactionInput(byte[] prevTxnId, long prevTxnOutputIndex, long sequenceNumber, UnlockingScriptBuilder unlocker){
         _prevTxnId = prevTxnId;
         _prevTxnOutputIndex = prevTxnOutputIndex;
-//        _scriptSig = unlocker.getScriptSig();
         _sequenceNumber = sequenceNumber;
         _unlockingScriptBuilder = unlocker;
 
