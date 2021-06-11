@@ -5,6 +5,7 @@ import org.twostack.bitcoin.Sha256Hash;
 import org.twostack.bitcoin.Utils;
 import org.twostack.bitcoin.VarInt;
 import org.twostack.bitcoin.exception.TransactionException;
+import org.twostack.bitcoin.exception.VerificationException;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -131,6 +132,76 @@ public class Transaction {
         Utils.uint32ToByteStreamLE(nLockTime, os);
 
         return os.toByteArray();
+    }
+
+
+    /**
+     * <p>Checks the transaction contents for sanity, in ways that can be done in a standalone manner.
+     * Does <b>not</b> perform all checks on a transaction such as whether the inputs are already spent.
+     * Specifically this method verifies:</p>
+     *
+     * <ul>
+     *     <li>That there is at least one input and output.</li>
+     *     <li>That the serialized size is not larger than the max block size.</li>
+     *     <li>That no outputs have negative value.</li>
+     *     <li>That the outputs do not sum to larger than the max allowed quantity of coin in the system.</li>
+     *     <li>If the tx is a coinbase tx, the coinbase scriptSig size is within range. Otherwise that there are no
+     *     coinbase inputs in the tx.</li>
+     * </ul>
+     *
+     * @throws VerificationException
+     */
+    public void verify() throws VerificationException {
+        if (inputs.size() == 0 || outputs.size() == 0)
+            throw new VerificationException.EmptyInputsOrOutputs();
+
+
+        List<String> outpoints = new ArrayList<>();
+        for (TransactionInput input : inputs) {
+
+            String outpointId = input.getPrevTxnId() + ":" + input.getPrevTxnOutputIndex();
+
+            if (outpoints.contains(outpointId)){
+                throw new VerificationException.DuplicatedOutPoint();
+            }
+
+            outpoints.add(outpointId);
+        }
+
+        BigInteger valueOut = BigInteger.ZERO;
+        for (TransactionOutput output : outputs) {
+            BigInteger value = output.getAmount();
+            if (value.signum() < 0)
+                throw new VerificationException.NegativeValueOutput();
+            try {
+                valueOut = valueOut.add(value);
+            } catch (ArithmeticException e) {
+                throw new VerificationException.ExcessiveValue();
+            }
+            if (valueOut.compareTo(BigInteger.valueOf(MAX_MONEY)) == 1)
+                throw new VerificationException.ExcessiveValue();
+        }
+
+        if (isCoinBase()) {
+            int progLength = inputs.get(0).getScriptSig().getProgram().length;
+            if (progLength < 2 ||  progLength > 100)
+                throw new VerificationException.CoinbaseScriptSizeOutOfRange();
+        } else {
+            for (TransactionInput input : inputs)
+                if (input.isCoinBase())
+                    throw new VerificationException.UnexpectedCoinbaseInput();
+        }
+    }
+
+
+    /**
+     * A coinbase transaction is one that creates a new coin. They are the first transaction in each block and their
+     * value is determined by a formula that all implementations of Bitcoin share. In 2011 the value of a coinbase
+     * transaction is 50 coins, but in future it will be less. A coinbase transaction is defined not only by its
+     * position in a block but by the data in the inputs.
+     */
+    public boolean isCoinBase() {
+        return inputs.size() == 1 && inputs.get(0).isCoinBase();
     }
 
 

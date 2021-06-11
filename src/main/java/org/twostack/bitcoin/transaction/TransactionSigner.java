@@ -1,13 +1,20 @@
 package org.twostack.bitcoin.transaction;
 
+import org.twostack.bitcoin.ECKey;
 import org.twostack.bitcoin.PrivateKey;
 import org.twostack.bitcoin.Sha256Hash;
 import org.twostack.bitcoin.Utils;
 import org.twostack.bitcoin.exception.SigHashException;
+import org.twostack.bitcoin.exception.SignatureDecodeException;
 import org.twostack.bitcoin.exception.TransactionException;
 import org.twostack.bitcoin.script.Script;
+import org.twostack.bitcoin.script.ScriptBuilder;
+import org.twostack.bitcoin.script.ScriptOpCodes;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 public class TransactionSigner {
 
@@ -16,7 +23,7 @@ public class TransactionSigner {
             TransactionOutput utxo,
             int inputIndex,
             PrivateKey signingKey,
-            int sigHashType) throws TransactionException, IOException, SigHashException {
+            int sigHashType) throws TransactionException, IOException, SigHashException, SignatureDecodeException {
 
         //FIXME: This is a test work-around for why I can't sign an unsigned raw txn
         //FIXME: This assumes we're signing P2PKH
@@ -37,7 +44,13 @@ public class TransactionSigner {
         // generate a signature for the input
         // TransactionSignature is just a thin wrapper over our signature to assert
         // type safety during serializing of our TransactionOutput
-        TransactionSignature sig = new TransactionSignature(signingKey.sign(hash), sigHashType);
+
+
+        //FIXME: This kind of required round-tripping into the base class of TransactionSignature smells funny
+        //       We should have a cleaner constructor for TransactionSignature
+        byte[] signedBytes =  signingKey.sign(hash);
+        ECKey.ECDSASignature ecSig = ECKey.ECDSASignature.decodeFromDER(signedBytes);
+        TransactionSignature sig = new TransactionSignature(ecSig.r, ecSig.s, sigHashType);
 
         TransactionInput input = unsignedTxn.getInputs().get(inputIndex);
         UnlockingScriptBuilder scriptBuilder = input.getUnlockingScriptBuilder();
@@ -50,5 +63,15 @@ public class TransactionSigner {
 
         return unsignedTxn; //signature has been added
     }
+
+
+    /** sf:> This seems like more Core buggery to me. What sort of TX remains valid without proper SighashType ???
+     *
+     * This is required for signatures which use a sigHashType which cannot be represented using SigHash and anyoneCanPay
+     * See transaction c99c49da4c38af669dea436d3e73780dfdb6c1ecf9958baa52960e8baee30e73, which has sigHashType 0
+     */
+//    public Sha256Hash hashForSignature(Transaction txn, int inputIndex, byte[] connectedScript, byte sigHashType) {
+//
+//    }
 
 }

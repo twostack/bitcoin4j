@@ -1,5 +1,6 @@
 package org.twostack.bitcoin.transaction;
 
+import org.twostack.bitcoin.Sha256Hash;
 import org.twostack.bitcoin.Utils;
 import org.twostack.bitcoin.VarInt;
 import org.twostack.bitcoin.script.Script;
@@ -72,6 +73,14 @@ public class TransactionInput {
         return wu.getBytes();
     }
 
+    /**
+     * Coinbase transactions have special inputs with hashes of zero. If this is such an input, returns true.
+     */
+    public boolean isCoinBase() {
+        return _prevTxnId.equals(Sha256Hash.ZERO_HASH.getBytes()) &&
+                (_prevTxnOutputIndex & 0xFFFFFFFFL) == 0xFFFFFFFFL;  // -1 but all is serialized to the wire as unsigned int.
+    }
+
     public long getSequenceNumber() {
         return _sequenceNumber;
     }
@@ -98,5 +107,9 @@ public class TransactionInput {
 
     public void setSequenceNumber(long i) {
         this._sequenceNumber = i;
+    }
+
+    public boolean isFinal() {
+        return _sequenceNumber == MAX_SEQ_NUMBER;
     }
 }

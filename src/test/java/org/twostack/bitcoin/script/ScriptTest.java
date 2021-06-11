@@ -24,6 +24,7 @@ package org.twostack.bitcoin.script;
 //import org.twostack.bitcoin.params.TestNet3Params;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.twostack.bitcoin.Sha256Hash;
 import org.twostack.bitcoin.UnsafeByteArrayOutputStream;
 import org.twostack.bitcoin.Utils;
         import org.twostack.bitcoin.script.Script.VerifyFlag;
@@ -32,6 +33,8 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.twostack.bitcoin.transaction.Transaction;
+import org.twostack.bitcoin.transaction.TransactionInput;
+import org.twostack.bitcoin.transaction.TransactionOutput;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -167,6 +170,121 @@ public class ScriptTest {
 
         assertThrows(ScriptException.class, () -> Script.fromAsmString(asm));
     }
+
+
+    private Set<VerifyFlag> parseVerifyFlags(String str) {
+        Set<VerifyFlag> flags = EnumSet.noneOf(VerifyFlag.class);
+        if (!"NONE".equals(str)) {
+            for (String flag : str.split(",")) {
+                try {
+                    flags.add(VerifyFlag.valueOf(flag));
+                } catch (IllegalArgumentException x) {
+                    log.debug("Cannot handle verify flag {} -- ignored.", flag);
+                }
+            }
+        }
+        return flags;
+    }
+
+//   FIXME: What is this meant to be used for ???
+//    private Map<TransactionOutput, Script> parseScriptPubKeys(JsonNode inputs) throws IOException {
+//        Map<TransactionOutput, Script> scriptPubKeys = new HashMap<>();
+//        for (JsonNode input : inputs) {
+//            String hash = input.get(0).asText();
+//            int index = input.get(1).asInt();
+//            String script = input.get(2).asText();
+//            Sha256Hash sha256Hash = Sha256Hash.wrap(HEX.decode(hash));
+//            scriptPubKeys.put(new TransactionOutput(TESTNET, index, sha256Hash), parseScriptString(script));
+//        }
+//        return scriptPubKeys;
+//    }
+//
+
+    private Script parseScriptString(String string) throws IOException {
+        String[] words = string.split("[ \\t\\n]");
+
+        UnsafeByteArrayOutputStream out = new UnsafeByteArrayOutputStream();
+
+        for(String w : words) {
+            if (w.equals(""))
+                continue;
+            if (w.matches("^-?[0-9]*$")) {
+                // Number
+                long val = Long.parseLong(w);
+                if (val >= -1 && val <= 16)
+                    out.write(Script.encodeToOpN((int)val));
+                else
+                    Script.writeBytes(out, Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(val), false)));
+            } else if (w.matches("^0x[0-9a-fA-F]*$")) {
+                // Raw hex data, inserted NOT pushed onto stack:
+                out.write(HEX.decode(w.substring(2).toLowerCase()));
+            } else if (w.length() >= 2 && w.startsWith("'") && w.endsWith("'")) {
+                // Single-quoted string, pushed as data. NOTE: this is poor-man's
+                // parsing, spaces/tabs/newlines in single-quoted strings won't work.
+                Script.writeBytes(out, w.substring(1, w.length() - 1).getBytes(StandardCharsets.UTF_8));
+            } else if (ScriptOpCodes.getOpCode(w) != OP_INVALIDOPCODE) {
+                // opcode, e.g. OP_ADD or OP_1:
+                out.write(ScriptOpCodes.getOpCode(w));
+            } else if (w.startsWith("OP_") && ScriptOpCodes.getOpCode(w.substring(3)) != OP_INVALIDOPCODE) {
+                // opcode, e.g. OP_ADD or OP_1:
+                out.write(ScriptOpCodes.getOpCode(w.substring(3)));
+            } else {
+                throw new RuntimeException("Invalid word: '" + w + "'");
+            }
+        }
+
+        return new Script(out.toByteArray());
+    }
+
+
+    /*
+    Tests that the provided test vectors provide valid spending transactions for the corresponding UTXOs
+     */
+//    @Test
+//    public void dataDrivenValidTransactions() throws Exception {
+//        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream("tx_valid.json"), StandardCharsets.UTF_8));
+//        for (JsonNode test : json) {
+//            if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
+//                continue; // This is a comment.
+//            Transaction spendingTx = null;
+//            try {
+//                Map<TransactionOutput, Script> scriptPubKeys = parseScriptPubKeys(test.get(0));
+//                spendingTx = Transaction.fromHex(test.get(1).asText().toLowerCase());
+//                spendingTx.verify();
+//                Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
+//
+//                for (int i = 0; i < spendingTx.getInputs().size(); i++) {
+//                    TransactionInput input = spendingTx.getInputs().get(i);
+////                    if (input.getOutpoint().getIndex() == 0xffffffffL) {
+////                        input.getOutpoint().setIndex(-1);
+////                    }
+////                    assertTrue(scriptPubKeys.containsKey(input.getOutpoint()));
+////                    input.getScriptSig().correctlySpends(transaction, i, null, null, scriptPubKeys.get(input.getOutpoint()), verifyFlags);
+//
+////                    expect(scriptPubkey, isNotNull);
+////                    expect(scriptSig, isNotNull);
+//                    Interpreter interp = Interpreter();
+//                    boolean verified = interp.verifyScript(scriptSig, scriptPubkey, spendingTx, index, flags);
+//                }
+//            } catch (Exception e) {
+//                System.err.println(test);
+//                if (transaction != null)
+//                    System.err.println(transaction);
+//                throw e;
+//            }
+//        }
+//    }
+
+//    test("bitcoind invalid transaction evaluation fixtures", () async {
+//        await File("${Directory.current.path}/test/data/bitcoind/tx_invalid.json")
+//                .readAsString()
+//                .then((contents) => jsonDecode(contents))
+//            .then((jsonData) {
+//                List.from(jsonData).forEach((vect) {
+//                        testTransaction(vect, false);
+//            });
+//        });
+//    });
 
 
 //  FIXME: These test vectors are important

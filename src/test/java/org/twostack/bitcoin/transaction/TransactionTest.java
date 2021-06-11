@@ -30,6 +30,7 @@ import org.twostack.bitcoin.address.Address;
 import org.twostack.bitcoin.address.LegacyAddress;
 import org.twostack.bitcoin.exception.InvalidKeyException;
 import org.twostack.bitcoin.exception.SigHashException;
+import org.twostack.bitcoin.exception.SignatureDecodeException;
 import org.twostack.bitcoin.exception.TransactionException;
 import org.twostack.bitcoin.params.NetworkAddressType;
 import org.twostack.bitcoin.script.Script;
@@ -62,7 +63,7 @@ public class TransactionTest {
     @Test
     public void TestSerializeDeserialize() throws IOException {
         Transaction transaction = Transaction.fromHex(tx1hex);
-        assertEquals(tx1hex, transaction.serialize());
+        assertEquals(tx1hex, HEX.encode(transaction.serialize()));
     }
 
     @Test
@@ -99,7 +100,7 @@ public class TransactionTest {
     }
 
     @Test
-    public void test_transaction_serialization_vectors() throws IOException, TransactionException, InvalidKeyException, SigHashException {
+    public void test_transaction_serialization_vectors() throws IOException, TransactionException, InvalidKeyException, SigHashException, SignatureDecodeException {
 
         JsonNode json = new ObjectMapper().readTree(
                 new InputStreamReader(getClass().getResourceAsStream("tx_creation.json"),

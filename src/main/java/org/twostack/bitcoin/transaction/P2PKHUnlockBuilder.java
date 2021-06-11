@@ -2,6 +2,7 @@ package org.twostack.bitcoin.transaction;
 
 import org.twostack.bitcoin.PublicKey;
 import org.twostack.bitcoin.Utils;
+import org.twostack.bitcoin.exception.SignatureDecodeException;
 import org.twostack.bitcoin.script.*;
 
 import java.util.List;
@@ -10,7 +11,7 @@ public class P2PKHUnlockBuilder extends UnlockingScriptBuilder {
 
     PublicKey signerPubkey;
 
-    P2PKHUnlockBuilder(Script script){
+    P2PKHUnlockBuilder(Script script) throws SignatureDecodeException {
         parse(script);
     }
 
@@ -18,7 +19,7 @@ public class P2PKHUnlockBuilder extends UnlockingScriptBuilder {
         this.signerPubkey = publicKey;
     }
 
-    private void parse(Script script){
+    private void parse(Script script) throws SignatureDecodeException {
 
         if (script != null) {
 
