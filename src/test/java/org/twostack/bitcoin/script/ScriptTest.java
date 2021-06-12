@@ -21,6 +21,7 @@ package org.twostack.bitcoin.script;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
+import org.twostack.bitcoin.exception.VerificationException;
 import org.twostack.bitcoin.script.Script.VerifyFlag;
 import org.junit.Before;
 import org.junit.Test;
@@ -196,7 +197,6 @@ public class ScriptTest {
         }
     }
 
-    /*
     @Test
     public void dataDrivenInvalidScripts() throws Exception {
         JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
@@ -206,7 +206,10 @@ public class ScriptTest {
                 Script scriptSig = parseScriptString(test.get(0).asText());
                 Script scriptPubKey = parseScriptString(test.get(1).asText());
                 Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-                scriptSig.correctlySpends(new Transaction(PARAMS), 0, scriptPubKey, verifyFlags);
+
+                Interpreter interp = new Interpreter();
+                interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
+
                 System.err.println(test);
                 System.err.flush();
                 fail();
@@ -216,6 +219,5 @@ public class ScriptTest {
         }
     }
 
-*/
 
 }
