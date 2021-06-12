@@ -46,6 +46,7 @@ import java.util.*;
 
 import static org.junit.Assert.*;
 import static org.twostack.bitcoin.Utils.HEX;
+import static org.twostack.bitcoin.util.TestUtil.parseScriptString;
 
 /**
  * Just check the Transaction.verify() method. Most methods that have complicated logic in Transaction are tested
@@ -306,40 +307,4 @@ public class TransactionTest {
         return scriptPubKeys;
     }
 
-
-    private Script parseScriptString(String string) throws IOException {
-        String[] words = string.split("[ \\t\\n]");
-
-        UnsafeByteArrayOutputStream out = new UnsafeByteArrayOutputStream();
-
-        for(String w : words) {
-            if (w.equals(""))
-                continue;
-            if (w.matches("^-?[0-9]*$")) {
-                // Number
-                long val = Long.parseLong(w);
-                if (val >= -1 && val <= 16)
-                    out.write(Script.encodeToOpN((int)val));
-                else
-                    Script.writeBytes(out, Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(val), false)));
-            } else if (w.matches("^0x[0-9a-fA-F]*$")) {
-                // Raw hex data, inserted NOT pushed onto stack:
-                out.write(HEX.decode(w.substring(2).toLowerCase()));
-            } else if (w.length() >= 2 && w.startsWith("'") && w.endsWith("'")) {
-                // Single-quoted string, pushed as data. NOTE: this is poor-man's
-                // parsing, spaces/tabs/newlines in single-quoted strings won't work.
-                Script.writeBytes(out, w.substring(1, w.length() - 1).getBytes(Charset.forName("UTF-8")));
-            } else if (ScriptOpCodes.getOpCode(w) != ScriptOpCodes.OP_INVALIDOPCODE) {
-                // opcode, e.g. OP_ADD or OP_1:
-                out.write(ScriptOpCodes.getOpCode(w));
-            } else if (w.startsWith("OP_") && ScriptOpCodes.getOpCode(w.substring(3)) != ScriptOpCodes.OP_INVALIDOPCODE) {
-                // opcode, e.g. OP_ADD or OP_1:
-                out.write(ScriptOpCodes.getOpCode(w.substring(3)));
-            } else {
-                throw new RuntimeException("Invalid Data");
-            }
-        }
-
-        return new Script(out.toByteArray());
-    }
 }

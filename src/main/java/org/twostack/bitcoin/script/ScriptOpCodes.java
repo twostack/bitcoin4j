@@ -88,9 +88,9 @@ public class ScriptOpCodes {
 
     // splice ops
     public static final int OP_CAT = 0x7e;
-    public static final int OP_SUBSTR = 0x7f;
-    public static final int OP_LEFT = 0x80;
-    public static final int OP_RIGHT = 0x81;
+    public static final int OP_SPLIT = 0x7f;
+    public static final int OP_NUM2BIN = 0x80;
+    public static final int OP_BIN2NUM = 0x81;
     public static final int OP_SIZE = 0x82;
 
     // bit logic
@@ -218,9 +218,9 @@ public class ScriptOpCodes {
         .put(OP_SWAP, "SWAP")
         .put(OP_TUCK, "TUCK")
         .put(OP_CAT, "CAT")
-        .put(OP_SUBSTR, "SUBSTR")
-        .put(OP_LEFT, "LEFT")
-        .put(OP_RIGHT, "RIGHT")
+        .put(OP_SPLIT, "SPLIT")
+        .put(OP_NUM2BIN, "NUM2BIN")
+        .put(OP_BIN2NUM, "BIN2NUM")
         .put(OP_SIZE, "SIZE")
         .put(OP_INVERT, "INVERT")
         .put(OP_AND, "AND")

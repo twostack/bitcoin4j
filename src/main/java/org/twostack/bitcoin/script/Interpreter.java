@@ -30,6 +30,7 @@ public class Interpreter {
     public static final long MAX_SCRIPT_ELEMENT_SIZE = 520;  // bytes
     private static final int MAX_OPS_PER_SCRIPT = 201;
     private static final int MAX_STACK_SIZE = 1000;
+    private static final int DEFAULT_MAX_NUM_ELEMENT_SIZE = 4;
     private static final int MAX_PUBKEYS_PER_MULTISIG = 20;
     private static final int MAX_SCRIPT_SIZE = 10000;
     public static final int SIG_SIZE = 75;
@@ -138,6 +139,44 @@ public class Interpreter {
     }
 
 
+    private static boolean isOpcodeDisabled(int opcode, Set<VerifyFlag> verifyFlags) {
+
+
+        switch (opcode) {
+            case OP_INVERT:
+            case OP_LSHIFT:
+            case OP_RSHIFT:
+
+            case OP_2MUL:
+            case OP_2DIV:
+            case OP_MUL:
+                //disabled codes
+                return true;
+
+            case OP_CAT:
+            case OP_SPLIT:
+            case OP_AND:
+            case OP_OR:
+            case OP_XOR:
+            case OP_DIV:
+            case OP_MOD:
+            case OP_NUM2BIN:
+            case OP_BIN2NUM:
+                //enabled codes, still disabled if flag is not activated
+                return !verifyFlags.contains(VerifyFlag.MONOLITH_OPCODES);
+
+            default:
+                //not an opcode that was ever disabled
+                break;
+        }
+
+
+
+        return false;
+
+    }
+
+
 //    /**
 //     * Exposes the script interpreter.
 //     * is useful if you need more precise control or access to the final state of the stack. This interface is very
@@ -156,9 +195,9 @@ public class Interpreter {
      */
     public static void executeScript(@Nullable Transaction txContainingThis, long index,
                                      Script script, LinkedList<byte[]> stack, Coin value, Set<VerifyFlag> verifyFlags /*, ScriptStateListener scriptStateListener*/) throws ScriptException {
-//    public void executeScript(@Nullable Transaction txContainingThis, long index, Script script, LinkedList<byte[]> stack, Set<VerifyFlag> verifyFlags) throws ScriptException {
         int opCount = 0;
         int lastCodeSepLocation = 0;
+        final boolean enforceMinimal = verifyFlags.contains(VerifyFlag.MINIMALDATA);
 
         LinkedList<byte[]> altstack = new LinkedList<>();
         LinkedList<Boolean> ifStack = new LinkedList<>();
@@ -181,11 +220,9 @@ public class Interpreter {
             }
 
             // Disabled opcodes.
-            if (opcode == OP_CAT || opcode == OP_SUBSTR || opcode == OP_LEFT || opcode == OP_RIGHT ||
-                    opcode == OP_INVERT || opcode == OP_AND || opcode == OP_OR || opcode == OP_XOR ||
-                    opcode == OP_2MUL || opcode == OP_2DIV || opcode == OP_MUL || opcode == OP_DIV ||
-                    opcode == OP_MOD || opcode == OP_LSHIFT || opcode == OP_RSHIFT)
+            if (isOpcodeDisabled(opcode, verifyFlags)){
                 throw new ScriptException(ScriptError.SCRIPT_ERR_DISABLED_OPCODE, "Script included a disabled Script Op.");
+            }
 
             if (shouldExecute && OP_0 <= opcode && opcode <= OP_PUSHDATA4) {
                 // Check minimal push
@@ -401,11 +438,161 @@ public class Interpreter {
                         if (opcode == OP_TUCK)
                             stack.add(OPSWAPtmpChunk2);
                         break;
+
+
+                    case OP_CAT:
+                        if (stack.size() < 2)
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
+                        byte[] catBytes2 = stack.pollLast();
+                        byte[] catBytes1 = stack.pollLast();
+
+                        int len = catBytes1.length + catBytes2.length;
+                        if (len > MAX_SCRIPT_ELEMENT_SIZE)
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Push value size limit exceeded.");
+
+                        byte[] catOut = new byte[len];
+                        System.arraycopy(catBytes1, 0, catOut, 0, catBytes1.length);
+                        System.arraycopy(catBytes2, 0, catOut, catBytes1.length, catBytes2.length);
+                        stack.addLast(catOut);
+
+                        break;
+
+                    case OP_NUM2BIN:
+                        if (stack.size() < 2)
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
+
+                        int numSize = castToBigInteger(stack.pollLast(), enforceMinimal).intValue();
+
+                        if (numSize > MAX_SCRIPT_ELEMENT_SIZE)
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_STACK_SIZE, "Push value size limit exceeded.");
+
+                        byte[] rawNumBytes = stack.pollLast();
+
+                        // Try to see if we can fit that number in the number of
+                        // byte requested.
+                        byte[] minimalNumBytes = Utils.minimallyEncodeLE(rawNumBytes);
+                        if (minimalNumBytes.length > numSize) {
+                            //we can't
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "The requested encoding is impossible to satisfy.");
+                        }
+
+                        if (minimalNumBytes.length == numSize) {
+                            //already the right size so just push it to stack
+                            stack.addLast(minimalNumBytes);
+                        } else if (numSize == 0) {
+                            stack.addLast(Utils.EMPTY_BYTE_ARRAY);
+                        } else {
+                            int signBit = 0x00;
+                            if (minimalNumBytes.length > 0) {
+                                signBit = minimalNumBytes[minimalNumBytes.length - 1] & 0x80;
+                                minimalNumBytes[minimalNumBytes.length - 1] &= 0x7f;
+                            }
+                            int minimalBytesToCopy = minimalNumBytes.length > numSize ? numSize : minimalNumBytes.length;
+                            byte[] expandedNumBytes = new byte[numSize]; //initialized to all zeroes
+                            System.arraycopy(minimalNumBytes, 0, expandedNumBytes, 0, minimalBytesToCopy);
+                            expandedNumBytes[expandedNumBytes.length - 1] = (byte) signBit;
+                            stack.addLast(expandedNumBytes);
+                        }
+                        break;
+
+                    case OP_SPLIT:
+                        if (stack.size() < 2)
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
+
+                        BigInteger biSplitPos = castToBigInteger(stack.pollLast(), enforceMinimal);
+
+                        //sanity check in case we aren't enforcing minimal number encoding
+                        //we will check that the biSplitPos value can be safely held in an int
+                        //before we cast it as BigInteger will behave similar to casting if the value
+                        //is greater than the target type can hold.
+                        BigInteger biMaxInt = BigInteger.valueOf((long) Integer.MAX_VALUE);
+                        if (biSplitPos.compareTo(biMaxInt) >= 0)
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Invalid OP_SPLIT range.");
+
+                        int splitPos = biSplitPos.intValue();
+                        byte[] splitBytes = stack.pollLast();
+
+                        if (splitPos > splitBytes.length || splitPos < 0)
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Invalid OP_SPLIT range.");
+
+                        byte[] splitOut1 = new byte[splitPos];
+                        byte[] splitOut2 = new byte[splitBytes.length - splitPos];
+
+                        System.arraycopy(splitBytes, 0, splitOut1, 0, splitPos);
+                        System.arraycopy(splitBytes, splitPos, splitOut2, 0, splitOut2.length);
+
+                        stack.addLast(splitOut1);
+                        stack.addLast(splitOut2);
+                        break;
+
+                    case OP_BIN2NUM:
+                        if (stack.size() < 1)
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
+
+                        byte[] binBytes = stack.pollLast();
+                        byte[] numBytes = Utils.minimallyEncodeLE(binBytes);
+
+                        if (!Utils.checkMinimallyEncodedLE(numBytes, DEFAULT_MAX_NUM_ELEMENT_SIZE))
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Given operand is not a number within the valid range [-2^31...2^31]");
+
+                        stack.addLast(numBytes);
+
+                        break;
                     case OP_SIZE:
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_SIZE on an empty stack");
                         stack.add(Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(stack.getLast().length), false)));
                         break;
+
+                    case OP_INVERT:
+                        throw new ScriptException(ScriptError.SCRIPT_ERR_DISABLED_OPCODE, "Attempted to use disabled Script Op.");
+                    case OP_AND:
+                    case OP_OR:
+                    case OP_XOR:
+                        // (x1 x2 - out)
+                        if (stack.size() < 2) {
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
+                        }
+
+                        //valtype &vch1 = stacktop(-2);
+                        //valtype &vch2 = stacktop(-1);
+                        byte[] vch2 = stack.pollLast();
+                        byte[] vch1 = stack.pollLast();
+
+                        // Inputs must be the same size
+                        if (vch1.length != vch2.length) {
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Invalid operand size.");
+                        }
+
+                        // To avoid allocating, we modify vch1 in place.
+                        switch (opcode) {
+                            case OP_AND:
+                                for (int i = 0; i < vch1.length; i++) {
+                                    vch1[i] &= vch2[i];
+                                }
+                                break;
+                            case OP_OR:
+                                for (int i = 0; i < vch1.length; i++) {
+                                    vch1[i] |= vch2[i];
+                                }
+                                break;
+                            case OP_XOR:
+                                for (int i = 0; i < vch1.length; i++) {
+                                    vch1[i] ^= vch2[i];
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+
+                        // And pop vch2.
+                        //popstack(stack);
+
+                        //put vch1 back on stack
+                        stack.addLast(vch1);
+
+                        break;
+
                     case OP_EQUAL:
                         if (stack.size() < 2)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_EQUAL on a stack with size < 2");
@@ -461,6 +648,8 @@ public class Interpreter {
                         break;
                     case OP_ADD:
                     case OP_SUB:
+                    case OP_DIV:
+                    case OP_MOD:
                     case OP_BOOLAND:
                     case OP_BOOLOR:
                     case OP_NUMEQUAL:
@@ -484,6 +673,39 @@ public class Interpreter {
                             case OP_SUB:
                                 numericOPresult = numericOPnum1.subtract(numericOPnum2);
                                 break;
+
+                            case OP_DIV:
+                                if (numericOPnum2.intValue() == 0)
+                                    throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Division by zero error");
+                                numericOPresult = numericOPnum1.divide(numericOPnum2);
+                                break;
+
+                            case OP_MOD:
+                                if (numericOPnum2.intValue() == 0)
+                                    throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Modulo by zero error");
+
+                                /**
+                                 * BigInteger doesn't behave the way we want for modulo operations.  Firstly it's
+                                 * always garunteed to return a +ve result.  Secondly it will throw an exception
+                                 * if the 2nd operand is negative.  So we'll convert the values to longs and use native
+                                 * modulo.  When we expand the number limits to arbitrary length we will likely need
+                                 * a new BigNum implementation to handle this correctly.
+                                 */
+                                long lOp1 = numericOPnum1.longValue();
+                                if (!BigInteger.valueOf(lOp1).equals(numericOPnum1)) {
+                                    //in case the value is larger than a long can handle we need to crash and burn.
+                                    throw new RuntimeException("Cannot handle large negative operand for modulo operation");
+                                }
+                                long lOp2 = numericOPnum2.longValue();
+                                if (!BigInteger.valueOf(lOp2).equals(numericOPnum2)) {
+                                    //in case the value is larger than a long can handle we need to crash and burn.
+                                    throw new RuntimeException("Cannot handle large negative operand for modulo operation");
+                                }
+                                long lOpResult = lOp1 % lOp2;
+                                numericOPresult = BigInteger.valueOf(lOpResult);
+
+                                break;
+
                             case OP_BOOLAND:
                                 if (!numericOPnum1.equals(BigInteger.ZERO) && !numericOPnum2.equals(BigInteger.ZERO))
                                     numericOPresult = BigInteger.ONE;

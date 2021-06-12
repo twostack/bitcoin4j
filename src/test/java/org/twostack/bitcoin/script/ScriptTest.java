@@ -18,34 +18,22 @@
 
 package org.twostack.bitcoin.script;
 
-//import org.twostack.bitcoin.transaction.Transaction.SigHash;
-//import org.twostack.bitcoin.crypto.TransactionSignature;
-//import org.twostack.bitcoin.params.MainNetParams;
-//import org.twostack.bitcoin.params.TestNet3Params;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.twostack.bitcoin.Sha256Hash;
-import org.twostack.bitcoin.UnsafeByteArrayOutputStream;
-import org.twostack.bitcoin.Utils;
-        import org.twostack.bitcoin.script.Script.VerifyFlag;
-        import org.junit.Before;
+import com.google.common.base.Charsets;
+import org.twostack.bitcoin.script.Script.VerifyFlag;
+import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.twostack.bitcoin.transaction.Transaction;
-import org.twostack.bitcoin.transaction.TransactionInput;
-import org.twostack.bitcoin.transaction.TransactionOutput;
 
-import java.io.IOException;
 import java.io.InputStreamReader;
-import java.math.BigInteger;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static org.twostack.bitcoin.Utils.HEX;
-        import static org.twostack.bitcoin.script.ScriptOpCodes.OP_INVALIDOPCODE;
-        import static org.junit.Assert.*;
+import static org.junit.Assert.*;
+import static org.twostack.bitcoin.util.TestUtil.parseScriptString;
 
 public class ScriptTest {
     // From tx 05e04c26c12fe408a3c1b71aa7996403f6acad1045252b1c62e055496f4d2cb1 on the testnet.
@@ -186,237 +174,48 @@ public class ScriptTest {
         return flags;
     }
 
-//   FIXME: What is this meant to be used for ???
-//    private Map<TransactionOutput, Script> parseScriptPubKeys(JsonNode inputs) throws IOException {
-//        Map<TransactionOutput, Script> scriptPubKeys = new HashMap<>();
-//        for (JsonNode input : inputs) {
-//            String hash = input.get(0).asText();
-//            int index = input.get(1).asInt();
-//            String script = input.get(2).asText();
-//            Sha256Hash sha256Hash = Sha256Hash.wrap(HEX.decode(hash));
-//            scriptPubKeys.put(new TransactionOutput(TESTNET, index, sha256Hash), parseScriptString(script));
-//        }
-//        return scriptPubKeys;
-//    }
-//
 
-    private Script parseScriptString(String string) throws IOException {
-        String[] words = string.split("[ \\t\\n]");
+    @Test
+    public void dataDrivenValidScripts() throws Exception {
+        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
+                "script_valid.json"), Charsets.UTF_8));
+        for (JsonNode test : json) {
+            Script scriptSig = parseScriptString(test.get(0).asText());
+            Script scriptPubKey = parseScriptString(test.get(1).asText());
+            Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
+            try {
 
-        UnsafeByteArrayOutputStream out = new UnsafeByteArrayOutputStream();
+                Interpreter interp = new Interpreter();
+                interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
 
-        for(String w : words) {
-            if (w.equals(""))
-                continue;
-            if (w.matches("^-?[0-9]*$")) {
-                // Number
-                long val = Long.parseLong(w);
-                if (val >= -1 && val <= 16)
-                    out.write(Script.encodeToOpN((int)val));
-                else
-                    Script.writeBytes(out, Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(val), false)));
-            } else if (w.matches("^0x[0-9a-fA-F]*$")) {
-                // Raw hex data, inserted NOT pushed onto stack:
-                out.write(HEX.decode(w.substring(2).toLowerCase()));
-            } else if (w.length() >= 2 && w.startsWith("'") && w.endsWith("'")) {
-                // Single-quoted string, pushed as data. NOTE: this is poor-man's
-                // parsing, spaces/tabs/newlines in single-quoted strings won't work.
-                Script.writeBytes(out, w.substring(1, w.length() - 1).getBytes(StandardCharsets.UTF_8));
-            } else if (ScriptOpCodes.getOpCode(w) != OP_INVALIDOPCODE) {
-                // opcode, e.g. OP_ADD or OP_1:
-                out.write(ScriptOpCodes.getOpCode(w));
-            } else if (w.startsWith("OP_") && ScriptOpCodes.getOpCode(w.substring(3)) != OP_INVALIDOPCODE) {
-                // opcode, e.g. OP_ADD or OP_1:
-                out.write(ScriptOpCodes.getOpCode(w.substring(3)));
-            } else {
-                throw new RuntimeException("Invalid word: '" + w + "'");
+            } catch (ScriptException e) {
+                System.err.println(test);
+                System.err.flush();
+                throw e;
             }
         }
-
-        return new Script(out.toByteArray());
     }
 
+    /*
+    @Test
+    public void dataDrivenInvalidScripts() throws Exception {
+        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
+                "script_invalid.json"), Charsets.UTF_8));
+        for (JsonNode test : json) {
+            try {
+                Script scriptSig = parseScriptString(test.get(0).asText());
+                Script scriptPubKey = parseScriptString(test.get(1).asText());
+                Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
+                scriptSig.correctlySpends(new Transaction(PARAMS), 0, scriptPubKey, verifyFlags);
+                System.err.println(test);
+                System.err.flush();
+                fail();
+            } catch (VerificationException e) {
+                // Expected.
+            }
+        }
+    }
 
+*/
 
-//    test("bitcoind invalid transaction evaluation fixtures", () async {
-//        await File("${Directory.current.path}/test/data/bitcoind/tx_invalid.json")
-//                .readAsString()
-//                .then((contents) => jsonDecode(contents))
-//            .then((jsonData) {
-//                List.from(jsonData).forEach((vect) {
-//                        testTransaction(vect, false);
-//            });
-//        });
-//    });
-
-
-//  FIXME: These test vectors are important
-//    @Test
-//    public void dataDrivenScripts() throws Exception {
-//        JsonNode json = new ObjectMapper()
-//                .readTree(new InputStreamReader(getClass().getResourceAsStream("script_tests.json"), StandardCharsets.UTF_8));
-//        for (JsonNode test : json) {
-//            if (test.size() == 1)
-//                continue; // skip comment
-//            Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-//            ScriptError expectedError = ScriptError.fromMnemonic(test.get(3).asText());
-//            try {
-//                Script scriptSig = parseScriptString(test.get(0).asText());
-//                Script scriptPubKey = parseScriptString(test.get(1).asText());
-//                Transaction txCredit = buildCreditingTransaction(scriptPubKey);
-//                Transaction txSpend = buildSpendingTransaction(txCredit, scriptSig);
-//                scriptSig.correctlySpends(txSpend, 0, null, null, scriptPubKey, verifyFlags);
-//                if (!expectedError.equals(ScriptError.SCRIPT_ERR_OK))
-//                    fail(test + " is expected to fail");
-//            } catch (ScriptException e) {
-//                if (!e.getError().equals(expectedError)) {
-//                    System.err.println(test);
-//                    e.printStackTrace();
-//                    System.err.flush();
-//                    throw e;
-//                }
-//            }
-//        }
-//    }
-
-//    private Map<TransactionOutPoint, Script> parseScriptPubKeys(JsonNode inputs) throws IOException {
-//        Map<TransactionOutPoint, Script> scriptPubKeys = new HashMap<>();
-//        for (JsonNode input : inputs) {
-//            String hash = input.get(0).asText();
-//            int index = input.get(1).asInt();
-//            String script = input.get(2).asText();
-//            Sha256Hash sha256Hash = Sha256Hash.wrap(HEX.decode(hash));
-//            scriptPubKeys.put(new TransactionOutPoint(TESTNET, index, sha256Hash), parseScriptString(script));
-//        }
-//        return scriptPubKeys;
-//    }
-
-//    private Transaction buildCreditingTransaction(Script scriptPubKey) {
-//        Transaction tx = new Transaction(TESTNET);
-//        tx.setVersion(1);
-//        tx.setLockTime(0);
-//
-//        TransactionInput txInput = new TransactionInput(TESTNET, null,
-//                new ScriptBuilder().number(0).number(0).build().getProgram());
-//        txInput.setSequenceNumber(TransactionInput.NO_SEQUENCE);
-//        tx.addInput(txInput);
-//
-//        TransactionOutput txOutput = new TransactionOutput(TESTNET, tx, Coin.ZERO, scriptPubKey.getProgram());
-//        tx.addOutput(txOutput);
-//
-//        return tx;
-//    }
-
-//    private Transaction buildSpendingTransaction(Transaction creditingTransaction, Script scriptSig) {
-//        Transaction tx = new Transaction(TESTNET);
-//        tx.setVersion(1);
-//        tx.setLockTime(0);
-//
-//        TransactionInput txInput = new TransactionInput(TESTNET, creditingTransaction, scriptSig.getProgram());
-//        txInput.setSequenceNumber(TransactionInput.NO_SEQUENCE);
-//        tx.addInput(txInput);
-//
-//        TransactionOutput txOutput = new TransactionOutput(TESTNET, tx, creditingTransaction.getOutput(0).getValue(),
-//                new Script(new byte[] {}).getProgram());
-//        tx.addOutput(txOutput);
-//
-//        return tx;
-//    }
-
-
-// FIXME: These vectors are important
-//    @Test
-//    public void dataDrivenValidTransactions() throws Exception {
-//        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
-//                "tx_valid.json"), StandardCharsets.UTF_8));
-//        for (JsonNode test : json) {
-//            if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
-//                continue; // This is a comment.
-//            Transaction transaction = null;
-//            try {
-//                Map<TransactionOutPoint, Script> scriptPubKeys = parseScriptPubKeys(test.get(0));
-//                transaction = TESTNET.getDefaultSerializer().makeTransaction(HEX.decode(test.get(1).asText().toLowerCase()));
-//                transaction.verify();
-//                Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-//
-//                for (int i = 0; i < transaction.getInputs().size(); i++) {
-//                    TransactionInput input = transaction.getInputs().get(i);
-//                    if (input.getOutpoint().getIndex() == 0xffffffffL)
-//                        input.getOutpoint().setIndex(-1);
-//                    assertTrue(scriptPubKeys.containsKey(input.getOutpoint()));
-//                    input.getScriptSig().correctlySpends(transaction, i, null, null,
-//                            scriptPubKeys.get(input.getOutpoint()), verifyFlags);
-//                }
-//            } catch (Exception e) {
-//                System.err.println(test);
-//                if (transaction != null)
-//                    System.err.println(transaction);
-//                throw e;
-//            }
-//        }
-//    }
-
-
-
-// FIXME: These vectors are important
-//    @Test
-//    public void dataDrivenInvalidTransactions() throws Exception {
-//        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
-//                "tx_invalid.json"), StandardCharsets.UTF_8));
-//        for (JsonNode test : json) {
-//            if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
-//                continue; // This is a comment.
-//            Map<TransactionOutPoint, Script> scriptPubKeys = parseScriptPubKeys(test.get(0));
-//            byte[] txBytes = HEX.decode(test.get(1).asText().toLowerCase());
-//            MessageSerializer serializer = TESTNET.getDefaultSerializer();
-//            Transaction transaction;
-//            try {
-//                transaction = serializer.makeTransaction(txBytes);
-//            } catch (ProtocolException ignore) {
-//                // Try to parse as a no-witness transaction because some vectors are 0-input, 1-output txs that fail
-//                // to correctly parse as witness transactions.
-//                int protoVersionNoWitness = serializer.getProtocolVersion() | SERIALIZE_TRANSACTION_NO_WITNESS;
-//                transaction = serializer.withProtocolVersion(protoVersionNoWitness).makeTransaction(txBytes);
-//            }
-//            Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-//
-//            boolean valid = true;
-//            try {
-//                transaction.verify();
-//            } catch (VerificationException e) {
-//                valid = false;
-//            }
-//
-//            // Bitcoin Core checks this case in CheckTransaction, but we leave it to
-//            // later where we will see an attempt to double-spend, so we explicitly check here
-//            HashSet<TransactionOutPoint> set = new HashSet<>();
-//            for (TransactionInput input : transaction.getInputs()) {
-//                if (set.contains(input.getOutpoint()))
-//                    valid = false;
-//                set.add(input.getOutpoint());
-//            }
-//
-//            for (int i = 0; i < transaction.getInputs().size() && valid; i++) {
-//                TransactionInput input = transaction.getInputs().get(i);
-//                assertTrue(scriptPubKeys.containsKey(input.getOutpoint()));
-//                try {
-//                    input.getScriptSig().correctlySpends(transaction, i, null, null,
-//                            scriptPubKeys.get(input.getOutpoint()), verifyFlags);
-//                } catch (VerificationException e) {
-//                    valid = false;
-//                }
-//            }
-//
-//            if (valid) {
-//                System.out.println(test);
-//                fail();
-//            }
-//        }
-//    }
-
-
-//    @Test(expected = ScriptException.class)
-//    public void getToAddressNoPubKey() throws Exception {
-//        ScriptBuilder.createP2PKOutputScript(new ECKey()).getToAddress(TESTNET, false);
-//    }
 }
