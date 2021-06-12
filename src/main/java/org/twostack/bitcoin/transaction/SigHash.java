@@ -69,7 +69,7 @@ public class SigHash {
             sigHashType = (newForkValue << 8) | (sigHashType & 0xff);
         }
 
-        if (((sigHashType & SigHashType.FORKID.byteValue()) != 0) && (flags & ENABLE_SIGHASH_FORKID) != 0) {
+        if (((sigHashType & SigHashType.FORKID.value) != 0) && (flags & ENABLE_SIGHASH_FORKID) != 0) {
             return sigHashForForkid(txnCopy, sigHashType, inputIndex, subscriptCopy, amount);
         }
 
@@ -91,8 +91,8 @@ public class SigHash {
 
         //txnCopy.serialize(false); //FIXME: why are we serializing ? what side-effect is triggered here on internal state ?
 
-        if ((sigHashType & 31) == SigHashType.NONE.byteValue() ||
-                (sigHashType & 31) == SigHashType.SINGLE.byteValue()) {
+        if ((sigHashType & 31) == SigHashType.NONE.value ||
+                (sigHashType & 31) == SigHashType.SINGLE.value) {
             // clear all sequenceNumbers
             int ndx = 0;
             for(TransactionInput input : txnCopy.getInputs()){
@@ -103,9 +103,9 @@ public class SigHash {
             };
         }
 
-        if ((sigHashType & 31) == SigHashType.NONE.byteValue()) {
+        if ((sigHashType & 31) == SigHashType.NONE.value) {
             txnCopy.clearOutputs();
-        } else if ((sigHashType & 31) == SigHashType.SINGLE.byteValue()) {
+        } else if ((sigHashType & 31) == SigHashType.SINGLE.value) {
             // The SIGHASH_SINGLE bug.
             // https://bitcointalk.org/index.php?topic=260595.0
             if (inputIndex >= txnCopy.getOutputs().size()) {
@@ -139,7 +139,7 @@ public class SigHash {
             txnCopy.replaceOutput(inputIndex, txout); //FIXME : ??? Is this the correct way ?
         }
 
-        if ((this._sigHashType & SigHashType.ANYONECANPAY.byteValue()) > 0) {
+        if ((this._sigHashType & SigHashType.ANYONECANPAY.value) > 0) {
             TransactionInput keepInput = txnCopy.getInputs().get(inputIndex);
             txnCopy.clearInputs();
             txnCopy.addInput(keepInput);
@@ -153,8 +153,8 @@ public class SigHash {
         WriteUtils writer = new WriteUtils();
 
         for (TransactionInput input: tx.getInputs()){
-            byte[] prevTxId = input.getPrevTxnId();
-            writer.writeBytes(prevTxId, prevTxId.length); //FIXME: This was reversed. LE ?
+            byte[] prevTxId = Utils.reverseBytes(input.getPrevTxnId());
+            writer.writeBytes(prevTxId, prevTxId.length);
             writer.writeUint32LE(input.getPrevTxnOutputIndex());
         }
 
@@ -205,19 +205,19 @@ public class SigHash {
         byte[] hashSequence = new byte[32];
         byte[] hashOutputs = new byte[32];
 
-        if (!((sigHashType & SigHashType.ANYONECANPAY.byteValue()) > 0)) {
+        if (!((sigHashType & SigHashType.ANYONECANPAY.value) > 0)) {
             hashPrevouts = getPrevoutHash(txnCopy);
         }
 
-        if (!((sigHashType & SigHashType.ANYONECANPAY.byteValue()) > 0) &&
-                ((sigHashType & 31) != SigHashType.SINGLE.byteValue()) &&
-                ((sigHashType & 31) != SigHashType.NONE.byteValue())) {
+        if (!((sigHashType & SigHashType.ANYONECANPAY.value) > 0) &&
+                ((sigHashType & 31) != SigHashType.SINGLE.value) &&
+                ((sigHashType & 31) != SigHashType.NONE.value)) {
             hashSequence = getSequenceHash(txnCopy);
         }
 
-        if (((sigHashType & 31) != SigHashType.SINGLE.byteValue()) && ((sigHashType & 31) != SigHashType.NONE.byteValue())) {
+        if (((sigHashType & 31) != SigHashType.SINGLE.value) && ((sigHashType & 31) != SigHashType.NONE.value)) {
             hashOutputs = getOutputsHash(txnCopy, null);
-        } else if (((sigHashType & 31) == SigHashType.SINGLE.byteValue()) && inputIndex < txnCopy.getOutputs().size()) {
+        } else if (((sigHashType & 31) == SigHashType.SINGLE.value) && inputIndex < txnCopy.getOutputs().size()) {
             hashOutputs = getOutputsHash(txnCopy, inputIndex);
         }
 
@@ -231,7 +231,7 @@ public class SigHash {
         writer.writeBytes(hashSequence, hashSequence.length);
 
         //  outpoint (32-byte hash + 4-byte little endian)
-        writer.writeBytes(input.getPrevTxnId(), input.getPrevTxnId().length);
+        writer.writeBytes(Utils.reverseBytes(input.getPrevTxnId()), input.getPrevTxnId().length);
         writer.writeUint32LE(input.getPrevTxnOutputIndex());
 
         // scriptCode of the input (serialized as scripts inside CTxOuts)
@@ -256,7 +256,9 @@ public class SigHash {
         writer.writeUint32LE(sigHashType >> 0);
 
         byte[] buf = writer.getBytes();
-        return Sha256Hash.hashTwice(buf);
+        byte[] hash = Sha256Hash.hashTwice(buf);
+
+        return hash;
     }
 
 
@@ -267,7 +269,10 @@ public class SigHash {
         writer.writeBytes(txnBytes, txnBytes.length);
         writer.writeUint32LE(this._sigHashType);
 
-        return Sha256Hash.hashTwice(writer.getBytes());
+        byte[] preImage = writer.getBytes();
+        String preImageHex = Utils.HEX.encode(preImage);
+
+        return Sha256Hash.hashTwice(preImage);
     }
 
 

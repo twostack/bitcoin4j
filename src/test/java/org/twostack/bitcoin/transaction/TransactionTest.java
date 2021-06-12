@@ -232,7 +232,7 @@ public class TransactionTest {
                 "tx_invalid.json"), Charsets.UTF_8));
         for (JsonNode test : json) {
             if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
-                continue; // This is a comment.
+                continue;
 
             Transaction spendingTx = null;
 
