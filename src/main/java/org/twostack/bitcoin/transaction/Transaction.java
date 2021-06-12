@@ -152,6 +152,7 @@ public class Transaction {
      * @throws VerificationException
      */
     public void verify() throws VerificationException {
+
         if (inputs.size() == 0 || outputs.size() == 0)
             throw new VerificationException.EmptyInputsOrOutputs();
 
@@ -159,7 +160,7 @@ public class Transaction {
         List<String> outpoints = new ArrayList<>();
         for (TransactionInput input : inputs) {
 
-            String outpointId = input.getPrevTxnId() + ":" + input.getPrevTxnOutputIndex();
+            String outpointId = Utils.HEX.encode(input.getPrevTxnId()) + ":" + input.getPrevTxnOutputIndex();
 
             if (outpoints.contains(outpointId)){
                 throw new VerificationException.DuplicatedOutPoint();
@@ -181,6 +182,7 @@ public class Transaction {
             if (valueOut.compareTo(BigInteger.valueOf(MAX_MONEY)) == 1)
                 throw new VerificationException.ExcessiveValue();
         }
+
 
         if (isCoinBase()) {
             int progLength = inputs.get(0).getScriptSig().getProgram().length;

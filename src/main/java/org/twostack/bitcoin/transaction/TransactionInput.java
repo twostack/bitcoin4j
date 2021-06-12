@@ -7,6 +7,7 @@ import org.twostack.bitcoin.script.Script;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.util.Arrays;
 
 public class TransactionInput {
 
@@ -77,7 +78,7 @@ public class TransactionInput {
      * Coinbase transactions have special inputs with hashes of zero. If this is such an input, returns true.
      */
     public boolean isCoinBase() {
-        return _prevTxnId.equals(Sha256Hash.ZERO_HASH.getBytes()) &&
+        return Arrays.equals(_prevTxnId, Sha256Hash.ZERO_HASH.getBytes() ) &&
                 (_prevTxnOutputIndex & 0xFFFFFFFFL) == 0xFFFFFFFFL;  // -1 but all is serialized to the wire as unsigned int.
     }
 

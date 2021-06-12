@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import com.google.common.base.Charsets;
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
 import org.slf4j.Logger;
@@ -30,10 +31,7 @@ import org.slf4j.LoggerFactory;
 import org.twostack.bitcoin.*;
 import org.twostack.bitcoin.address.Address;
 import org.twostack.bitcoin.address.LegacyAddress;
-import org.twostack.bitcoin.exception.InvalidKeyException;
-import org.twostack.bitcoin.exception.SigHashException;
-import org.twostack.bitcoin.exception.SignatureDecodeException;
-import org.twostack.bitcoin.exception.TransactionException;
+import org.twostack.bitcoin.exception.*;
 import org.twostack.bitcoin.params.NetworkAddressType;
 import org.twostack.bitcoin.script.Interpreter;
 import org.twostack.bitcoin.script.Script;
@@ -44,13 +42,9 @@ import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 import static org.twostack.bitcoin.Utils.HEX;
 
 /**
@@ -196,8 +190,6 @@ public class TransactionTest {
             Transaction spendingTx = null;
 
             try {
-
-
                 Map<String, Script> scriptPubKeys = parseScriptPubKeys(test.get(0));
                 spendingTx = Transaction.fromHex(test.get(1).asText().toLowerCase());
                 spendingTx.verify();
@@ -231,6 +223,62 @@ public class TransactionTest {
             }
         }
     }
+
+
+    @Test
+    public void dataDrivenInvalidTransactions() throws Exception {
+        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
+                "tx_invalid.json"), Charsets.UTF_8));
+        for (JsonNode test : json) {
+            if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
+                continue; // This is a comment.
+
+            Transaction spendingTx = null;
+
+            Map<String, Script> scriptPubKeys = parseScriptPubKeys(test.get(0));
+            spendingTx = Transaction.fromHex(test.get(1).asText().toLowerCase());
+            Set<Script.VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
+
+            boolean valid = true;
+            try {
+                spendingTx.verify();
+            } catch (VerificationException e) {
+                valid = false;
+            }
+
+            // Bitcoin Core checks this case in CheckTransaction, but we leave it to
+            // later where we will see an attempt to double-spend, so we explicitly check here
+//            for (TransactionInput input : spendingTx.getInputs()) {
+//                if (set.contains(input.getOutpoint()))
+//                    valid = false;
+//                set.add(input.getOutpoint());
+//            }
+
+            for (int i = 0; i < spendingTx.getInputs().size() && valid; i++) {
+                TransactionInput input = spendingTx.getInputs().get(i);
+
+                //reconstruct the key into our Map of Public Keys using the details from
+                //the parsed transaction
+                String txId = HEX.encode(input.getPrevTxnId());
+                String keyName = "" + input.getPrevTxnOutputIndex() + ":" + txId;
+
+                assertTrue(scriptPubKeys.containsKey(keyName));
+                try {
+                    Interpreter interp = new Interpreter();
+                    interp.correctlySpends( input.getScriptSig(), scriptPubKeys.get(keyName), spendingTx, i , verifyFlags);
+
+                } catch (VerificationException e) {
+                    valid = false;
+                }
+
+            }
+            System.out.println(test.get(0));
+
+            if (valid)
+                fail();
+        }
+    }
+
 
     private Set<Script.VerifyFlag> parseVerifyFlags(String str) {
         Set<Script.VerifyFlag> flags = EnumSet.noneOf(Script.VerifyFlag.class);
