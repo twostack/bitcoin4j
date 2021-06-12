@@ -1,8 +1,6 @@
 package org.twostack.bitcoin.transaction;
 
-import org.twostack.bitcoin.Sha256Hash;
-import org.twostack.bitcoin.Utils;
-import org.twostack.bitcoin.VarInt;
+import org.twostack.bitcoin.*;
 import org.twostack.bitcoin.exception.SigHashException;
 import org.twostack.bitcoin.script.Script;
 import org.twostack.bitcoin.script.ScriptBuilder;
@@ -10,11 +8,14 @@ import org.twostack.bitcoin.script.ScriptChunk;
 import org.twostack.bitcoin.script.ScriptOpCodes;
 
 import javax.annotation.Nullable;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+
+import static org.twostack.bitcoin.Utils.uint32ToByteStreamLE;
 
 public class SigHash {
     /// Do we accept signature using SIGHASH_FORKID
@@ -34,17 +35,20 @@ public class SigHash {
     private Script _subScript;
 
 
-    /* Calculates the hash value according to the Sighash flags specified in [sighashType]
-    ///
-    /// [unsignedTxn] - The transaction to calculate the signature has for
-    ///
-    /// [sighashType] - The bitwise combination of [SighashType] flags
-    ///
-    /// [inputNumber] - The input index in [txn] that the hash applies to
-    ///
-    /// [subscript]   - The portion of [SVScript] in the [TransactionOutput] of Spent [Transaction]
-    ///                 (after OP_CODESEPERATOR) that will be covered by the signature.
-    ///
+    /**
+     * <p>Calculates a signature hash, that is, a hash of a simplified form of the transaction. How exactly the transaction
+     * is simplified is specified by the type and anyoneCanPay parameters.</p>
+     *
+     * When working with more complex transaction types and contracts, it can be necessary. When signing a P2SH output
+     * the redeemScript should be the script encoded into the scriptSig field, for normal transactions, it's the
+     * scriptPubKey of the output you're signing for.</p>
+     *
+     * @param unsignedTxn - The transaction to calculate the signature has for
+     * @param sigHashType - The bitwise combination of [SighashType] flags
+     * @param inputIndex -  The input index in [txn] that the hash applies to
+     * @param subscript - The portion of [SVScript] in the [TransactionOutput] of Spent [Transaction]
+     *                   (after OP_CODESEPERATOR) that will be covered by the signature.
+     * @param amount  - Amount in Satoshis. Used as part of ForkId calculation. Can be ZERO.
      */
     public byte[] createHash(Transaction unsignedTxn, int sigHashType, int inputIndex, Script subscript, BigInteger amount) throws IOException, SigHashException {
         /// [flags]       - The bitwise combination of [ScriptFlags] related to Sighash. Applies to BSV and BCH only,
@@ -105,7 +109,16 @@ public class SigHash {
             // The SIGHASH_SINGLE bug.
             // https://bitcointalk.org/index.php?topic=260595.0
             if (inputIndex >= txnCopy.getOutputs().size()) {
-                return _SIGHASH_SINGLE_BUG;
+
+                // The input index is beyond the number of outputs, it's a buggy signature made by a broken
+                // Bitcoin implementation. Bitcoin Core also contains a bug in handling this case:
+                // any transaction output that is signed in this case will result in both the signed output
+                // and any future outputs to this public key being steal-able by anyone who has
+                // the resulting signature and the public key (both of which are part of the signed tx input).
+
+                // Bitcoin Core's bug is that SignatureHash was supposed to return a hash and on this codepath it
+                // actually returns the constant "1" to indicate an error, which is never checked for. Oops.
+                return Sha256Hash.wrap("0100000000000000000000000000000000000000000000000000000000000000").getBytes();
             }
 
             TransactionOutput output = txnCopy.getOutputs().get(inputIndex);
@@ -179,6 +192,7 @@ public class SigHash {
     }
 
 
+//    public synchronized Sha256Hash hashForSignatureWitness( Transaction txn, int inputIndex, byte[] connectedScript, Coin prevValue, SigHashType type, boolean anyoneCanPay) {
     private byte[] sigHashForForkid(Transaction txnCopy, int sigHashType, int inputIndex, Script subscriptCopy, BigInteger satoshis) throws SigHashException, IOException {
 
         if (satoshis == null){
@@ -277,4 +291,6 @@ public class SigHash {
 
         return new Script(newChunks);
     }
+
+
 }

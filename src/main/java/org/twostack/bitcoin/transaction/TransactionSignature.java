@@ -6,6 +6,7 @@ import org.twostack.bitcoin.Utils;
 import org.twostack.bitcoin.exception.SignatureDecodeException;
 import org.twostack.bitcoin.exception.VerificationException;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -25,11 +26,6 @@ public class TransactionSignature extends ECKey.ECDSASignature {
     public final int sighashFlags;
 
 
-//    public TransactionSignature(BigInteger r, BigInteger s, int hashType ){
-//        super(r, s);
-//        this.sighashFlags = hashType;
-//    }
-
 
 /**
  * A TransactionSignature wraps an {@link ECKey.ECDSASignature} and adds methods for handling
@@ -46,6 +42,12 @@ public class TransactionSignature extends ECKey.ECDSASignature {
     public TransactionSignature(BigInteger r, BigInteger s, int sighashFlags) {
         super(r, s);
         this.sighashFlags = sighashFlags;
+    }
+
+
+    public TransactionSignature(ECKey.ECDSASignature signature, SigHashType mode, boolean anyoneCanPay, boolean useForkId) {
+        super(signature.r, signature.s);
+        sighashFlags = calcSigHashValue(mode, anyoneCanPay, useForkId);
     }
 
     /** Constructs a transaction signature based on the ECDSA signature. */
@@ -86,6 +88,31 @@ public class TransactionSignature extends ECKey.ECDSASignature {
     }
 
 
+    public static int calcSigHashValue(SigHashType mode, boolean anyoneCanPay, boolean useForkId) {
+        Preconditions.checkArgument(SigHashType.ALL == mode || SigHashType.NONE == mode || SigHashType.SINGLE == mode); // enforce compatibility since this code was made before the SigHash enum was updated
+        int sighashFlags = mode.value;
+        if (anyoneCanPay)
+            sighashFlags |= SigHashType.ANYONECANPAY.value;
+        if(useForkId)
+            sighashFlags |= SigHashType.FORKID.value;
+        return sighashFlags;
+    }
+
+
+    /**
+     * Returns a decoded signature.
+     *
+     * @param requireCanonicalEncoding if the encoding of the signature must
+     * be canonical.
+     * @throws RuntimeException if the signature is invalid or unparseable in some way.
+     * @deprecated use {@link #decodeFromBitcoin(byte[], boolean, boolean)} instead.
+     */
+    @Deprecated
+    public static TransactionSignature decodeFromBitcoin(byte[] bytes, boolean requireCanonicalEncoding) throws VerificationException, SignatureDecodeException {
+        return decodeFromBitcoin(bytes, requireCanonicalEncoding, false);
+    }
+
+
     /**
      * Returns a decoded signature.
      *
@@ -99,14 +126,20 @@ public class TransactionSignature extends ECKey.ECDSASignature {
     public static TransactionSignature decodeFromBitcoin(byte[] bytes, boolean requireCanonicalEncoding, boolean requireCanonicalSValue) throws SignatureDecodeException, VerificationException {
         // Bitcoin encoding is DER signature + sighash byte.
         if (requireCanonicalEncoding && !isEncodingCanonical(bytes))
-            throw new VerificationException.NoncanonicalSignature();
-        ECKey.ECDSASignature sig = ECKey.ECDSASignature.decodeFromDER(bytes);
+            throw new VerificationException("Signature encoding is not canonical.");
+        ECKey.ECDSASignature sig;
+        try {
+            sig = ECKey.ECDSASignature.decodeFromDER(bytes);
+        } catch (IllegalArgumentException e) {
+            throw new VerificationException("Could not decode DER", e);
+        }
         if (requireCanonicalSValue && !sig.isCanonical())
             throw new VerificationException("S-value is not canonical.");
 
         // In Bitcoin, any value of the final byte is valid, but not necessarily canonical. See javadocs for
         // isEncodingCanonical to learn more about this. So we must store the exact byte found.
         return new TransactionSignature(sig.r, sig.s, bytes[bytes.length - 1]);
+
     }
 
 
@@ -165,6 +198,51 @@ public class TransactionSignature extends ECKey.ECDSASignature {
     public byte[] getSignatureBytes() {
         return encodeToDER();
     }
+
+    public static boolean hasForkId (byte[] signature)
+    {
+        int forkId = (signature[signature.length-1] & 0xff) & SigHashType.FORKID.value; // mask the byte to prevent sign-extension hurting us
+
+        return forkId == SigHashType.FORKID.value;
+    }
+
+    public boolean anyoneCanPay() {
+        return (sighashFlags & SigHashType.ANYONECANPAY.value) != 0;
+    }
+    public boolean useForkId() {
+        return (sighashFlags & SigHashType.FORKID.value) != 0;
+    }
+
+    public SigHashType sigHashMode() {
+        final int mode = sighashFlags & 0x1f;
+        if (mode == SigHashType.NONE.value)
+            return SigHashType.NONE;
+        else if (mode == SigHashType.SINGLE.value)
+            return SigHashType.SINGLE;
+        else
+            return SigHashType.ALL;
+    }
+
+    /**
+     * What we get back from the signer are the two components of a signature, r and s. To get a flat byte stream
+     * of the type used by Bitcoin we have to encode them using DER encoding, which is just a way to pack the two
+     * components into a structure, and then we append a byte to the end for the sighash flags.
+     */
+    public byte[] encodeToBitcoin() {
+        try {
+            ByteArrayOutputStream bos = derByteStream();
+            bos.write(sighashFlags);
+            return bos.toByteArray();
+        } catch (IOException e) {
+            throw new RuntimeException(e);  // Cannot happen.
+        }
+    }
+
+    @Override
+    public ECKey.ECDSASignature toCanonicalised() {
+        return new TransactionSignature(super.toCanonicalised(), sigHashMode(), anyoneCanPay(), useForkId());
+    }
+
 
 
     public byte[] toTxFormat() throws IOException {

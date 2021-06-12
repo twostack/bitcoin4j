@@ -237,43 +237,6 @@ public class ScriptTest {
     }
 
 
-    /*
-    Tests that the provided test vectors provide valid spending transactions for the corresponding UTXOs
-     */
-//    @Test
-//    public void dataDrivenValidTransactions() throws Exception {
-//        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream("tx_valid.json"), StandardCharsets.UTF_8));
-//        for (JsonNode test : json) {
-//            if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
-//                continue; // This is a comment.
-//            Transaction spendingTx = null;
-//            try {
-//                Map<TransactionOutput, Script> scriptPubKeys = parseScriptPubKeys(test.get(0));
-//                spendingTx = Transaction.fromHex(test.get(1).asText().toLowerCase());
-//                spendingTx.verify();
-//                Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-//
-//                for (int i = 0; i < spendingTx.getInputs().size(); i++) {
-//                    TransactionInput input = spendingTx.getInputs().get(i);
-////                    if (input.getOutpoint().getIndex() == 0xffffffffL) {
-////                        input.getOutpoint().setIndex(-1);
-////                    }
-////                    assertTrue(scriptPubKeys.containsKey(input.getOutpoint()));
-////                    input.getScriptSig().correctlySpends(transaction, i, null, null, scriptPubKeys.get(input.getOutpoint()), verifyFlags);
-//
-////                    expect(scriptPubkey, isNotNull);
-////                    expect(scriptSig, isNotNull);
-//                    Interpreter interp = Interpreter();
-//                    boolean verified = interp.verifyScript(scriptSig, scriptPubkey, spendingTx, index, flags);
-//                }
-//            } catch (Exception e) {
-//                System.err.println(test);
-//                if (transaction != null)
-//                    System.err.println(transaction);
-//                throw e;
-//            }
-//        }
-//    }
 
 //    test("bitcoind invalid transaction evaluation fixtures", () async {
 //        await File("${Directory.current.path}/test/data/bitcoind/tx_invalid.json")

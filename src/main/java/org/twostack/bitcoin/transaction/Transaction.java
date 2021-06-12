@@ -93,7 +93,7 @@ public class Transaction {
         nLockTime = reader.readUint32();
     }
 
-    byte[] serialize() throws IOException {
+    public byte[] serialize() throws IOException {
 
         ByteArrayOutputStream os = new ByteArrayOutputStream();
 

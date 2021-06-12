@@ -15,7 +15,7 @@ public class TransactionInput {
         want to indicate that the transaction's [Transaction.nLockTime] should be ignored.
         This is a 64-bit value, in range 0 to (2^64) - 1
      */
-    static long MAX_SEQ_NUMBER =  0xFFFFFFFF;
+    static long MAX_SEQ_NUMBER =  0xFFFFFFFFL;
 
     private long _sequenceNumber;
 
@@ -110,6 +110,10 @@ public class TransactionInput {
     }
 
     public boolean isFinal() {
-        return _sequenceNumber == MAX_SEQ_NUMBER;
+        return _sequenceNumber != MAX_SEQ_NUMBER;
+    }
+
+    public void setPrevTxnOutputIndex(int i) {
+        this._prevTxnOutputIndex = i;
     }
 }

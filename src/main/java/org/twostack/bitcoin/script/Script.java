@@ -93,11 +93,12 @@ public class Script {
         LOW_S, // Passing a non-strict-DER signature or one with S > order/2 to a checksig operation causes script failure
         NULLDUMMY, // Verify dummy stack item consumed by CHECKMULTISIG is of zero-length.
         SIGPUSHONLY, // Using a non-push operator in the scriptSig causes script failure (softfork safe, BIP62 rule 2).
-        MINIMALDATA, // Require minimal encodings for all push operations
+        MINIMALDATA, // Require minimal encodings for all push operations and number encodings
         DISCOURAGE_UPGRADABLE_NOPS, // Discourage use of NOPs reserved for upgrades (NOP1-10)
         CLEANSTACK, // Require that only a single stack element remains after evaluation.
         CHECKLOCKTIMEVERIFY, // Enable CHECKLOCKTIMEVERIFY operation
-        CHECKSEQUENCEVERIFY // Enable CHECKSEQUENCEVERIFY operation
+        ENABLESIGHASHFORKID,
+        MONOLITH_OPCODES // May 15, 2018 Hard fork
     }
     public static final EnumSet<VerifyFlag> ALL_VERIFY_FLAGS = EnumSet.allOf(VerifyFlag.class);
 
@@ -112,6 +113,7 @@ public class Script {
     public static final int MAX_P2SH_SIGOPS = 15;
 
     // The program is a set of chunks where each element is either [opcode] or [data, data, data ...]
+    //FIXME: Make this private.
     protected List<ScriptChunk> chunks;
     // Unfortunately, scripts are not ever re-serialized or canonicalized when used in signature hashing. Thus we
     // must preserve the exact bytes that we read off the wire, along with the parsed form.

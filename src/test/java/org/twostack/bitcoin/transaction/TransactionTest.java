@@ -25,7 +25,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import org.assertj.core.api.Assertions;
 import org.junit.Test;
-import org.twostack.bitcoin.PrivateKey;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.twostack.bitcoin.*;
 import org.twostack.bitcoin.address.Address;
 import org.twostack.bitcoin.address.LegacyAddress;
 import org.twostack.bitcoin.exception.InvalidKeyException;
@@ -33,14 +35,19 @@ import org.twostack.bitcoin.exception.SigHashException;
 import org.twostack.bitcoin.exception.SignatureDecodeException;
 import org.twostack.bitcoin.exception.TransactionException;
 import org.twostack.bitcoin.params.NetworkAddressType;
+import org.twostack.bitcoin.script.Interpreter;
 import org.twostack.bitcoin.script.Script;
+import org.twostack.bitcoin.script.ScriptOpCodes;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigInteger;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -59,6 +66,7 @@ public class TransactionTest {
     String txEmptyHex = "01000000000000000000";
     String coinbaseOutput = "02000000016b748661a108dc35d8868a9a552b9364c6ee3f06a4604f722882d49cdc4d13020000000048473044022073062451397fb5e7e2e02f1603e2a92677d516a5e747b1ae2ad0996387916d4302200ae2ec97d4525621cef07f75f0b92b5e83341761fa604c83daf0390a76d5024241feffffff0200e1f505000000001976a91494837d2d5d6106aa97db38957dcc294181ee91e988ac00021024010000001976a9144d991c88b4fd954ea62aa7182d3b3e251896a83188acd5000000";
 
+    private static final Logger log = LoggerFactory.getLogger(TransactionTest.class);
 
     @Test
     public void TestSerializeDeserialize() throws IOException {
@@ -173,5 +181,117 @@ public class TransactionTest {
 
         }
 
+    }
+
+
+    /*
+    Tests that the provided test vectors provide valid spending transactions for the corresponding UTXOs
+     */
+    @Test
+    public void dataDrivenValidTransactions() throws Exception {
+        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream("tx_valid.json"), StandardCharsets.UTF_8));
+        for (JsonNode test : json) {
+            if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
+                continue; // This is a comment.
+            Transaction spendingTx = null;
+
+            try {
+
+
+                Map<String, Script> scriptPubKeys = parseScriptPubKeys(test.get(0));
+                spendingTx = Transaction.fromHex(test.get(1).asText().toLowerCase());
+                spendingTx.verify();
+                Set<Script.VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
+
+                for (int i = 0; i < spendingTx.getInputs().size(); i++) {
+                    TransactionInput input = spendingTx.getInputs().get(i);
+                    if (input.getPrevTxnOutputIndex() == 0xffffffffL) {
+                        input.setPrevTxnOutputIndex(-1);
+                    }
+
+                    //reconstruct the key into our Map of Public Keys using the details from
+                    //the parsed transaction
+                    String txId = HEX.encode(input.getPrevTxnId());
+                    String keyName = "" + input.getPrevTxnOutputIndex() + ":" + txId;
+
+                    //assert that our parsed transaction has correctly extracted the provided
+                    //UTXO details
+                    assertTrue(scriptPubKeys.containsKey(keyName));
+                    Interpreter interp = new Interpreter();
+                    interp.correctlySpends( input.getScriptSig(), scriptPubKeys.get(keyName), spendingTx, i , verifyFlags);
+
+                    System.out.println(test.get(0));
+                    //TODO: Would be better to assert expectation that no exception is thrown ?
+                }
+            } catch (Exception e) {
+                System.err.println(test);
+                if (spendingTx!= null)
+                    System.err.println(spendingTx);
+                throw e;
+            }
+        }
+    }
+
+    private Set<Script.VerifyFlag> parseVerifyFlags(String str) {
+        Set<Script.VerifyFlag> flags = EnumSet.noneOf(Script.VerifyFlag.class);
+        if (!"NONE".equals(str)) {
+            for (String flag : str.split(",")) {
+                try {
+                    flags.add(Script.VerifyFlag.valueOf(flag));
+                } catch (IllegalArgumentException x) {
+                    log.debug("Cannot handle verify flag {} -- ignored.", flag);
+                }
+            }
+        }
+        return flags;
+    }
+
+    private Map<String, Script> parseScriptPubKeys(JsonNode inputs) throws IOException {
+        Map<String, Script> scriptPubKeys = new HashMap<String, Script>();
+        for (JsonNode input : inputs) {
+            String hash = input.get(0).asText();
+            int index = input.get(1).asInt();
+            String script = input.get(2).asText();
+            Sha256Hash sha256Hash = Sha256Hash.wrap(HEX.decode(hash));
+            scriptPubKeys.put("" + index + ":" + sha256Hash.toString(), parseScriptString(script));
+        }
+        return scriptPubKeys;
+    }
+
+
+    private Script parseScriptString(String string) throws IOException {
+        String[] words = string.split("[ \\t\\n]");
+
+        UnsafeByteArrayOutputStream out = new UnsafeByteArrayOutputStream();
+
+        for(String w : words) {
+            if (w.equals(""))
+                continue;
+            if (w.matches("^-?[0-9]*$")) {
+                // Number
+                long val = Long.parseLong(w);
+                if (val >= -1 && val <= 16)
+                    out.write(Script.encodeToOpN((int)val));
+                else
+                    Script.writeBytes(out, Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(val), false)));
+            } else if (w.matches("^0x[0-9a-fA-F]*$")) {
+                // Raw hex data, inserted NOT pushed onto stack:
+                out.write(HEX.decode(w.substring(2).toLowerCase()));
+            } else if (w.length() >= 2 && w.startsWith("'") && w.endsWith("'")) {
+                // Single-quoted string, pushed as data. NOTE: this is poor-man's
+                // parsing, spaces/tabs/newlines in single-quoted strings won't work.
+                Script.writeBytes(out, w.substring(1, w.length() - 1).getBytes(Charset.forName("UTF-8")));
+            } else if (ScriptOpCodes.getOpCode(w) != ScriptOpCodes.OP_INVALIDOPCODE) {
+                // opcode, e.g. OP_ADD or OP_1:
+                out.write(ScriptOpCodes.getOpCode(w));
+            } else if (w.startsWith("OP_") && ScriptOpCodes.getOpCode(w.substring(3)) != ScriptOpCodes.OP_INVALIDOPCODE) {
+                // opcode, e.g. OP_ADD or OP_1:
+                out.write(ScriptOpCodes.getOpCode(w.substring(3)));
+            } else {
+                throw new RuntimeException("Invalid Data");
+            }
+        }
+
+        return new Script(out.toByteArray());
     }
 }

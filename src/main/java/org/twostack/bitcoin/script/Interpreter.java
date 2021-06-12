@@ -3,20 +3,17 @@ package org.twostack.bitcoin.script;
 import org.bouncycastle.crypto.digests.RIPEMD160Digest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.twostack.bitcoin.ECKey;
-import org.twostack.bitcoin.Sha256Hash;
-import org.twostack.bitcoin.UnsafeByteArrayOutputStream;
-import org.twostack.bitcoin.Utils;
+import org.twostack.bitcoin.*;
+import org.twostack.bitcoin.exception.ProtocolException;
+import org.twostack.bitcoin.exception.SigHashException;
 import org.twostack.bitcoin.exception.SignatureDecodeException;
 import org.twostack.bitcoin.exception.VerificationException;
-import org.twostack.bitcoin.transaction.Transaction;
-import org.twostack.bitcoin.transaction.TransactionInput;
-import org.twostack.bitcoin.transaction.TransactionSignature;
-import org.twostack.bitcoin.transaction.TransactionSigner;
+import org.twostack.bitcoin.transaction.*;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -66,7 +63,7 @@ public class Interpreter {
     /**
      * Cast a script chunk to a BigInteger. Normally you would want
      * {@link #castToBigInteger(byte[], boolean)} instead, this is only for cases where
-     * the normal maximum length does not apply (i.e. CHECKLOCKTIMEVERIFY, CHECKSEQUENCEVERIFY).
+     * the normal maximum length does not apply (i.e. CHECKLOCKTIMEVERIFY).
      *
      * @param maxLength the maximum length in bytes.
      * @param requireMinimal check if the number is encoded with the minimum possible number of bytes
@@ -141,8 +138,25 @@ public class Interpreter {
     }
 
 
-    public void executeScript(@Nullable Transaction txContainingThis, long index,
-                                     Script script, LinkedList<byte[]> stack, Set<VerifyFlag> verifyFlags) throws ScriptException {
+//    /**
+//     * Exposes the script interpreter.
+//     * is useful if you need more precise control or access to the final state of the stack. This interface is very
+//     * likely to change in future.
+//     */
+//    public static void executeScript(@Nullable Transaction txContainingThis, long index,
+//                                     Script script, LinkedList<byte[]> stack, Coin value, Set<VerifyFlag> verifyFlags) throws ScriptException {
+//        executeScript(txContainingThis,index, script, stack, value, verifyFlags /*, null*/);
+//    }
+
+
+    /**
+     * Exposes the script interpreter. Normally you should not use this directly, instead use
+     * is useful if you need more precise control or access to the final state of the stack. This interface is very
+     * likely to change in future.
+     */
+    public static void executeScript(@Nullable Transaction txContainingThis, long index,
+                                     Script script, LinkedList<byte[]> stack, Coin value, Set<VerifyFlag> verifyFlags /*, ScriptStateListener scriptStateListener*/) throws ScriptException {
+//    public void executeScript(@Nullable Transaction txContainingThis, long index, Script script, LinkedList<byte[]> stack, Set<VerifyFlag> verifyFlags) throws ScriptException {
         int opCount = 0;
         int lastCodeSepLocation = 0;
 
@@ -234,7 +248,7 @@ public class Interpreter {
                     case OP_14:
                     case OP_15:
                     case OP_16:
-                        stack.add(Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(decodeFromOpN(opcode)), false)));
+                        stack.add(Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(Script.decodeFromOpN(opcode)), false)));
                         break;
                     case OP_NOP:
                         break;
@@ -595,212 +609,19 @@ public class Interpreter {
                         break;
                     case OP_CHECKSIG:
                     case OP_CHECKSIGVERIFY:
+
                         if (txContainingThis == null)
                             throw new IllegalStateException("Script attempted signature check but no tx was provided");
-
-                        /*
-
-                        // (sig pubkey -- bool)
-                        if (stack.size() < 2) {
-                            return set_error(
-                                serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                        }
-                        LimitedVector &vchSig = stack.stacktop(-2);
-                        LimitedVector &vchPubKey = stack.stacktop(-1);
-
-                        if (!CheckSignatureEncoding(vchSig.GetElement(), flags, serror) ||
-                            !CheckPubKeyEncoding(vchPubKey.GetElement(), flags, serror)) {
-                            // serror is set
-                            return false;
-                        }
-
-                        // Subset of script starting at the most recent
-                        // codeseparator
-                        CScript scriptCode(pbegincodehash, pend);
-
-                        // Remove signature for pre-fork scripts
-                        CleanupScriptCode(scriptCode, vchSig.GetElement(), flags);
-
-                        bool fSuccess = checker.CheckSig(vchSig.GetElement(), vchPubKey.GetElement(),
-                                                         scriptCode, flags & SCRIPT_ENABLE_SIGHASH_FORKID);
-
-                        if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) &&
-                            vchSig.size()) {
-                            return set_error(serror, SCRIPT_ERR_SIG_NULLFAIL);
-                        }
-
-                        stack.pop_back();
-                        stack.pop_back();
-                        stack.push_back(fSuccess ? vchTrue : vchFalse);
-                        if (opcode == OP_CHECKSIGVERIFY) {
-                            if (fSuccess) {
-                                stack.pop_back();
-                            } else {
-                                return set_error(serror,
-                                                 SCRIPT_ERR_CHECKSIGVERIFY);
-                            }
-                        }
-                    } break;
-                         */
-
-
+                        executeCheckSig(txContainingThis, (int) index, script, stack, lastCodeSepLocation, opcode, value, verifyFlags);
                         break;
+
                     case OP_CHECKMULTISIG:
                     case OP_CHECKMULTISIGVERIFY:
                         if (txContainingThis == null)
                             throw new IllegalStateException("Script attempted signature check but no tx was provided");
-
-
-                        // ([sig ...] num_of_signatures [pubkey ...]
-                        // num_of_pubkeys -- bool)
-
-                        int i = 1;
-                        if (stack.size() < i) {
-                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKLOCKTIMEVERIFY on a stack with size < 1");
-                        }
-
-                        /*
-                        // initialize to max size of CScriptNum::MAXIMUM_ELEMENT_SIZE (4 bytes)
-                        // because only 4 byte integers are supported by  OP_CHECKMULTISIG / OP_CHECKMULTISIGVERIFY
-                        int64_t nKeysCountSigned =
-                            CScriptNum(stack.stacktop(-i).GetElement(), fRequireMinimal, CScriptNum::MAXIMUM_ELEMENT_SIZE).getint();
-                        if (nKeysCountSigned < 0) {
-                            return set_error(serror, SCRIPT_ERR_PUBKEY_COUNT);
-                        }
-
-                        uint64_t nKeysCount = static_cast<uint64_t>(nKeysCountSigned);
-                        if (nKeysCount > config.GetMaxPubKeysPerMultiSig(utxo_after_genesis, consensus)) {
-                            return set_error(serror, SCRIPT_ERR_PUBKEY_COUNT);
-                        }
-
-                        nOpCount += nKeysCount;
-                        if (!IsValidMaxOpsPerScript(nOpCount, config, utxo_after_genesis, consensus)) {
-                            return set_error(serror, SCRIPT_ERR_OP_COUNT);
-                        }
-                        uint64_t ikey = ++i;
-                        // ikey2 is the position of last non-signature item in
-                        // the stack. Top stack item = 1. With
-                        // SCRIPT_VERIFY_NULLFAIL, this is used for cleanup if
-                        // operation fails.
-                        uint64_t ikey2 = nKeysCount + 2;
-                        i += nKeysCount;
-                        if (stack.size() < i) {
-                            return set_error(
-                                serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                        }
-
-                        int64_t nSigsCountSigned =
-                            CScriptNum(stack.stacktop(-i).GetElement(), fRequireMinimal, CScriptNum::MAXIMUM_ELEMENT_SIZE).getint();
-
-                        if (nSigsCountSigned < 0) {
-                            return set_error(serror, SCRIPT_ERR_SIG_COUNT);
-                        }
-                        uint64_t nSigsCount = static_cast<uint64_t>(nSigsCountSigned);
-                        if (nSigsCount > nKeysCount) {
-                            return set_error(serror, SCRIPT_ERR_SIG_COUNT);
-                        }
-
-                        uint64_t isig = ++i;
-                        i += nSigsCount;
-                        if (stack.size() < i) {
-                            return set_error(
-                                serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                        }
-
-                        // Subset of script starting at the most recent
-                        // codeseparator
-                        CScript scriptCode(pbegincodehash, pend);
-
-                        // Remove signature for pre-fork scripts
-                        for (uint64_t k = 0; k < nSigsCount; k++) {
-                            LimitedVector &vchSig = stack.stacktop(-isig - k);
-                            CleanupScriptCode(scriptCode, vchSig.GetElement(), flags);
-                        }
-
-                        bool fSuccess = true;
-                        while (fSuccess && nSigsCount > 0) {
-                            if (token.IsCanceled())
-                            {
-                                return {};
-                            }
-
-                            LimitedVector &vchSig = stack.stacktop(-isig);
-                            LimitedVector &vchPubKey = stack.stacktop(-ikey);
-
-                            // Note how this makes the exact order of
-                            // pubkey/signature evaluation distinguishable by
-                            // CHECKMULTISIG NOT if the STRICTENC flag is set.
-                            // See the script_(in)valid tests for details.
-
-                            if (!CheckSignatureEncoding(vchSig.GetElement(), flags, serror) ||
-                                !CheckPubKeyEncoding(vchPubKey.GetElement(), flags, serror)) {
-                                // serror is set
-                                return false;
-                            }
-
-                            // Check signature
-                            bool fOk = checker.CheckSig(vchSig.GetElement(), vchPubKey.GetElement(),
-                                                        scriptCode, flags & SCRIPT_ENABLE_SIGHASH_FORKID);
-
-                            if (fOk) {
-                                isig++;
-                                nSigsCount--;
-                            }
-                            ikey++;
-                            nKeysCount--;
-
-                            // If there are more signatures left than keys left,
-                            // then too many signatures have failed. Exit early,
-                            // without checking any further signatures.
-                            if (nSigsCount > nKeysCount) {
-                                fSuccess = false;
-                            }
-                        }
-
-                        // Clean up stack of actual arguments
-                        while (i-- > 1) {
-                            // If the operation failed, we require that all
-                            // signatures must be empty vector
-                            if (!fSuccess && (flags & SCRIPT_VERIFY_NULLFAIL) &&
-                                !ikey2 && stack.stacktop(-1).size()) {
-                                return set_error(serror,
-                                                 SCRIPT_ERR_SIG_NULLFAIL);
-                            }
-                            if (ikey2 > 0) {
-                                ikey2--;
-                            }
-                            stack.pop_back();
-                        }
-
-                        // A bug causes CHECKMULTISIG to consume one extra
-                        // argument whose contents were not checked in any way.
-                        //
-                        // Unfortunately this is a potential source of
-                        // mutability, so optionally verify it is exactly equal
-                        // to zero prior to removing it from the stack.
-                        if (stack.size() < 1) {
-                            return set_error(
-                                serror, SCRIPT_ERR_INVALID_STACK_OPERATION);
-                        }
-                        if ((flags & SCRIPT_VERIFY_NULLDUMMY) &&
-                            stack.stacktop(-1).size()) {
-                            return set_error(serror, SCRIPT_ERR_SIG_NULLDUMMY);
-                        }
-                        stack.pop_back();
-
-                        stack.push_back(fSuccess ? vchTrue : vchFalse);
-
-                        if (opcode == OP_CHECKMULTISIGVERIFY) {
-                            if (fSuccess) {
-                                stack.pop_back();
-                            } else {
-                                return set_error(
-                                    serror, SCRIPT_ERR_CHECKMULTISIGVERIFY);
-                            }
-                        }
-                    } break;
-                         */
+                        opCount = executeMultiSig(txContainingThis, (int) index, script, stack, opCount, lastCodeSepLocation, opcode, value, verifyFlags);
                         break;
+
                     case OP_CHECKLOCKTIMEVERIFY:
                         if (!verifyFlags.contains(VerifyFlag.CHECKLOCKTIMEVERIFY)) {
                             // not enabled; treat as a NOP2
@@ -811,17 +632,8 @@ public class Interpreter {
                         }
                         executeCheckLockTimeVerify(txContainingThis, (int) index, stack, verifyFlags);
                         break;
-                    case OP_CHECKSEQUENCEVERIFY:
-                        if (!verifyFlags.contains(VerifyFlag.CHECKSEQUENCEVERIFY)) {
-                            // not enabled; treat as a NOP3
-                            if (verifyFlags.contains(VerifyFlag.DISCOURAGE_UPGRADABLE_NOPS)) {
-                                throw new ScriptException(ScriptError.SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS, "Script used a reserved opcode " + opcode);
-                            }
-                            break;
-                        }
-                        executeCheckSequenceVerify(txContainingThis, (int) index, stack, verifyFlags);
-                        break;
                     case OP_NOP1:
+                    case OP_NOP3:
                     case OP_NOP4:
                     case OP_NOP5:
                     case OP_NOP6:
@@ -886,76 +698,234 @@ public class Interpreter {
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Transaction contains a final transaction input for a CHECKLOCKTIMEVERIFY script.");
     }
 
-    private static void executeCheckSequenceVerify(Transaction txContainingThis, int index, LinkedList<byte[]> stack, Set<VerifyFlag> verifyFlags) throws ScriptException {
-        if (stack.size() < 1)
-            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKSEQUENCEVERIFY on a stack with size < 1");
 
-        // Note that elsewhere numeric opcodes are limited to
-        // operands in the range -2**31+1 to 2**31-1, however it is
-        // legal for opcodes to produce results exceeding that
-        // range. This limitation is implemented by CScriptNum's
-        // default 4-byte limit.
-        //
-        // Thus as a special case we tell CScriptNum to accept up
-        // to 5-byte bignums, which are good until 2**39-1, well
-        // beyond the 2**32-1 limit of the nSequence field itself.
-        final long nSequence = castToBigInteger(stack.getLast(), 5, verifyFlags.contains(VerifyFlag.MINIMALDATA)).longValue();
-
-        // In the rare event that the argument may be < 0 due to
-        // some arithmetic being done first, you can always use
-        // 0 MAX CHECKSEQUENCEVERIFY.
-        if (nSequence < 0)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_NEGATIVE_LOCKTIME, "Negative sequence");
-
-        // To provide for future soft-fork extensibility, if the
-        // operand has the disabled lock-time flag set,
-        // CHECKSEQUENCEVERIFY behaves as a NOP.
-        if ((nSequence & ScriptFlags.SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0)
-            return;
-
-        // Compare the specified sequence number with the input.
-        checkSequence(nSequence, txContainingThis, index);
+    public void correctlySpends( Script scriptSig, Script scriptPubKey, Transaction txn, int scriptSigIndex, Set<VerifyFlag> verifyFlags) throws ScriptException {
+        correctlySpends(scriptSig, scriptPubKey, txn, scriptSigIndex,  verifyFlags, Coin.ZERO);
     }
 
-    private static void checkSequence(long nSequence, Transaction txContainingThis, int index) {
-        // Relative lock times are supported by comparing the passed
-        // in operand to the sequence number of the input.
-        long txToSequence = txContainingThis.getInputs().get(index).getSequenceNumber();
+    /**
+     * Verifies that this script (interpreted as a scriptSig) correctly spends the given scriptPubKey.
+     * TODO: Verify why I'd need to pass in scriptSig again if I already have it from the [txn] + [scriptSigIndex] parameter
+     *
+     * @param scriptSig the spending Script
+     * @param scriptSigIndex The index in the provided txn of the scriptSig
+     * @param txn The transaction in which the provided scriptSig resides.
+     *            Accessing txn from another thread while this method runs results in undefined behavior.
+     * @param scriptPubKey The connected scriptPubKey (in output ) containing the conditions needed to claim the value.
+     * @param verifyFlags Each flag enables one validation rule.
+     * @param satoshis Value of the input ? Needed for verification when ForkId sighash is used
+     */
+    public void correctlySpends( Script scriptSig, Script scriptPubKey, Transaction txn, int scriptSigIndex, Set<VerifyFlag> verifyFlags, Coin satoshis) throws ScriptException {
+//    public void correctlySpends(Transaction txn, long scriptSigIndex, Script scriptPubKey, Coin value, Set<VerifyFlag> verifyFlags) throws ScriptException {
+        // Clone the transaction because executing the script involves editing it, and if we die, we'll leave
+        // the tx half broken (also it's not so thread safe to work on it directly.
+        Transaction transaction;
+        try {
+            transaction = new Transaction(ByteBuffer.wrap(txn.serialize()));
+        } catch (ProtocolException | IOException e) {
+            throw new RuntimeException(e);   // Should not happen unless we were given a totally broken transaction.
+        }
+        if (scriptSig.getProgram().length > 10000 || scriptPubKey.getProgram().length > 10000)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_SCRIPT_SIZE, "Script larger than 10,000 bytes");
 
-        // Fail if the transaction's version number is not set high
-        // enough to trigger BIP 68 rules.
-        if (txContainingThis.getVersion() < 2)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Transaction version is < 2");
+        LinkedList<byte[]> stack = new LinkedList<byte[]>();
+        LinkedList<byte[]> p2shStack = null;
 
-        // Sequence numbers with their most significant bit set are not
-        // consensus constrained. Testing that the transaction's sequence
-        // number do not have this bit set prevents using this property
-        // to get around a CHECKSEQUENCEVERIFY check.
-        if ((txToSequence & ScriptFlags.SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Sequence disable flag is set");
+        //Q: Do we run the scriptSig to prime the stack, then run the scriptIndex ?
+        executeScript(transaction, scriptSigIndex, scriptSig,  stack, satoshis, verifyFlags);
+        if (verifyFlags.contains(VerifyFlag.P2SH))
+            p2shStack = new LinkedList<byte[]>(stack);
 
-        // Mask off any bits that do not have consensus-enforced meaning
-        // before doing the integer comparisons
-        long nLockTimeMask =  ScriptFlags.SEQUENCE_LOCKTIME_TYPE_FLAG | ScriptFlags.SEQUENCE_LOCKTIME_MASK;
-        long txToSequenceMasked = txToSequence & nLockTimeMask;
-        long nSequenceMasked = nSequence & nLockTimeMask;
+        executeScript(transaction, scriptSigIndex, scriptPubKey, stack, satoshis, verifyFlags);
 
-        // There are two kinds of nSequence: lock-by-blockheight
-        // and lock-by-blocktime, distinguished by whether
-        // nSequenceMasked < CTxIn::SEQUENCE_LOCKTIME_TYPE_FLAG.
+        if (stack.size() == 0)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_CLEANSTACK, "Stack empty at end of script execution.");
+
+        if (!castToBool(stack.pollLast()))
+            throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "Script resulted in a non-true stack: " + stack);
+
+        // P2SH is pay to script hash. It means that the scriptPubKey has a special form which is a valid
+        // program but it has "useless" form that if evaluated as a normal program always returns true.
+        // Instead, miners recognize it as special based on its template - it provides a hash of the real scriptPubKey
+        // and that must be provided by the input. The goal of this bizarre arrangement is twofold:
         //
-        // We want to compare apples to apples, so fail the script
-        // unless the type of nSequenceMasked being tested is the same as
-        // the nSequenceMasked in the transaction.
-        if (!((txToSequenceMasked < ScriptFlags.SEQUENCE_LOCKTIME_TYPE_FLAG && nSequenceMasked < ScriptFlags.SEQUENCE_LOCKTIME_TYPE_FLAG) ||
-                (txToSequenceMasked >= ScriptFlags.SEQUENCE_LOCKTIME_TYPE_FLAG && nSequenceMasked >= ScriptFlags.SEQUENCE_LOCKTIME_TYPE_FLAG))) {
-            throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Relative locktime requirement type mismatch");
+        // (1) You can sum up a large, complex script (like a CHECKMULTISIG script) with an address that's the same
+        //     size as a regular address. This means it doesn't overload scannable QR codes/NFC tags or become
+        //     un-wieldy to copy/paste.
+        // (2) It allows the working set to be smaller: nodes perform best when they can store as many unspent outputs
+        //     in RAM as possible, so if the outputs are made smaller and the inputs get bigger, then it's better for
+        //     overall scalability and performance.
+
+        // TODO: Check if we can take out enforceP2SH if there's a checkpoint at the enforcement block.
+        if (verifyFlags.contains(VerifyFlag.P2SH) && ScriptPattern.isP2SH(scriptPubKey)) {
+            for (ScriptChunk chunk : scriptSig.getChunks())
+                if (chunk.isOpCode() && chunk.opcode > OP_16)
+                    throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Attempted to spend a P2SH scriptPubKey with a script that contained script ops");
+
+            byte[] scriptPubKeyBytes = p2shStack.pollLast();
+            Script scriptPubKeyP2SH = new Script(scriptPubKeyBytes);
+
+            executeScript(transaction, scriptSigIndex, scriptPubKeyP2SH, p2shStack, satoshis, verifyFlags);
+
+            if (p2shStack.size() == 0)
+                throw new ScriptException(ScriptError.SCRIPT_ERR_CLEANSTACK, "P2SH stack empty at end of script execution.");
+
+            if (!castToBool(p2shStack.pollLast()))
+                throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "P2SH script execution resulted in a non-true stack");
+        }
+    }
+
+
+    private static void executeCheckSig(Transaction txContainingThis, int index, Script script, LinkedList<byte[]> stack,
+                                        int lastCodeSepLocation, int opcode, Coin value,
+                                        Set<VerifyFlag> verifyFlags) throws ScriptException {
+        final boolean requireCanonical = verifyFlags.contains(VerifyFlag.STRICTENC)
+                || verifyFlags.contains(VerifyFlag.DERSIG)
+                || verifyFlags.contains(VerifyFlag.LOW_S);
+        if (stack.size() < 2)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_STACK_SIZE, "Attempted OP_CHECKSIG(VERIFY) on a stack with size < 2");
+        byte[] pubKey = stack.pollLast();
+        byte[] sigBytes = stack.pollLast();
+
+        byte[] prog = script.getProgram();
+        byte[] connectedScript = Arrays.copyOfRange(prog, lastCodeSepLocation, prog.length);
+
+        UnsafeByteArrayOutputStream outStream = new UnsafeByteArrayOutputStream(sigBytes.length + 1);
+        try {
+            writeBytes(outStream, sigBytes);
+        } catch (IOException e) {
+            throw new RuntimeException(e); // Cannot happen
+        }
+        connectedScript = removeAllInstancesOf(connectedScript, outStream.toByteArray());
+
+        // TODO: Use int for indexes everywhere, we can't have that many inputs/outputs
+        boolean sigValid = false;
+        try {
+            TransactionSignature sig  = TransactionSignature.decodeFromBitcoin(sigBytes, requireCanonical, verifyFlags.contains(VerifyFlag.LOW_S));
+
+            // TODO: Should check hash type is known
+            SigHash sigHash = new SigHash();
+
+            int sighashMode = sig.sigHashMode().value;
+            if (sig.useForkId()) {
+               sighashMode = sig.sigHashMode().value | SigHashType.FORKID.value;
+            }
+
+            byte[] hash = sigHash.createHash(txContainingThis, sig.sighashFlags, index, new Script(connectedScript), BigInteger.valueOf(value.value)); //FIXME: Use Coin instead ?
+//            Sha256Hash hash = sig.useForkId() ?
+//                    txContainingThis.hashForSignatureWitness(index, connectedScript, value, sig.sigHashMode(), sig.anyoneCanPay()) :
+//                    txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
+            sigValid = ECKey.verify(hash, sig, pubKey);
+        } catch (Exception e1) {
+            // There is (at least) one exception that could be hit here (EOFException, if the sig is too short)
+            // Because I can't verify there aren't more, we use a very generic Exception catch
+
+            // This RuntimeException occurs when signing as we run partial/invalid scripts to see if they need more
+            // signing work to be done inside LocalTransactionSigner.signInputs.
+            if (!e1.getMessage().contains("Reached past end of ASN.1 stream"))
+                log.warn("Signature checking failed!", e1);
         }
 
-        // Now that we know we're comparing apples-to-apples, the
-        // comparison is a simple numeric one.
-        if (nSequenceMasked > txToSequenceMasked)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Relative locktime requirement not satisfied");
+        if (opcode == OP_CHECKSIG)
+            stack.add(sigValid ? new byte[] {1} : new byte[] {});
+        else if (opcode == OP_CHECKSIGVERIFY)
+            if (!sigValid)
+                throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKSIGVERIFY, "Script failed OP_CHECKSIGVERIFY");
+    }
+
+    private static int executeMultiSig(Transaction txContainingThis, int index, Script script, LinkedList<byte[]> stack,
+                                       int opCount, int lastCodeSepLocation, int opcode, Coin value,
+                                       Set<VerifyFlag> verifyFlags) throws ScriptException {
+        final boolean requireCanonical = verifyFlags.contains(VerifyFlag.STRICTENC)
+                || verifyFlags.contains(VerifyFlag.DERSIG)
+                || verifyFlags.contains(VerifyFlag.LOW_S);
+        final boolean enforceMinimal = verifyFlags.contains(VerifyFlag.MINIMALDATA);
+        if (stack.size() < 2)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_STACK_SIZE, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < 2");
+        int pubKeyCount = castToBigInteger(stack.pollLast(), enforceMinimal).intValue();
+        if (pubKeyCount < 0 || pubKeyCount > 20)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "OP_CHECKMULTISIG(VERIFY) with pubkey count out of range");
+        opCount += pubKeyCount;
+        if (opCount > 201)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "Total op count > 201 during OP_CHECKMULTISIG(VERIFY)");
+        if (stack.size() < pubKeyCount + 1)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < num_of_pubkeys + 2");
+
+        LinkedList<byte[]> pubkeys = new LinkedList<byte[]>();
+        for (int i = 0; i < pubKeyCount; i++) {
+            byte[] pubKey = stack.pollLast();
+            pubkeys.add(pubKey);
+        }
+
+        int sigCount = castToBigInteger(stack.pollLast(), enforceMinimal).intValue();
+        if (sigCount < 0 || sigCount > pubKeyCount)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "OP_CHECKMULTISIG(VERIFY) with sig count out of range");
+        if (stack.size() < sigCount + 1)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < num_of_pubkeys + num_of_signatures + 3");
+
+        LinkedList<byte[]> sigs = new LinkedList<byte[]>();
+        for (int i = 0; i < sigCount; i++) {
+            byte[] sig = stack.pollLast();
+            sigs.add(sig);
+        }
+
+        byte[] prog = script.getProgram();
+        byte[] connectedScript = Arrays.copyOfRange(prog, lastCodeSepLocation, prog.length);
+
+        for (byte[] sig : sigs) {
+            UnsafeByteArrayOutputStream outStream = new UnsafeByteArrayOutputStream(sig.length + 1);
+            try {
+                writeBytes(outStream, sig);
+            } catch (IOException e) {
+                throw new RuntimeException(e); // Cannot happen
+            }
+            connectedScript = removeAllInstancesOf(connectedScript, outStream.toByteArray());
+        }
+
+        boolean valid = true;
+        while (sigs.size() > 0) {
+            byte[] pubKey = pubkeys.pollFirst();
+            // We could reasonably move this out of the loop, but because signature verification is significantly
+            // more expensive than hashing, its not a big deal.
+            try {
+                TransactionSignature sig = TransactionSignature.decodeFromBitcoin(sigs.getFirst(), requireCanonical);
+
+                SigHash sigHash = new SigHash();
+
+                int sighashMode = sig.sigHashMode().value;
+                if (sig.useForkId()) {
+                    sighashMode = sig.sigHashMode().value | SigHashType.FORKID.value;
+                }
+
+                byte[] hash = sigHash.createHash(txContainingThis, sighashMode, index, new Script(connectedScript), BigInteger.valueOf(value.value)); //FIXME: Use Coin instead ?
+//                Sha256Hash hash = sig.useForkId() ?
+//                        txContainingThis.hashForSignatureWitness(index, connectedScript, value, sig.sigHashMode(), sig.anyoneCanPay()):
+//                        txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
+                if (ECKey.verify(hash, sig, pubKey))
+                    sigs.pollFirst();
+            } catch (Exception e) {
+                // There is (at least) one exception that could be hit here (EOFException, if the sig is too short)
+                // Because I can't verify there aren't more, we use a very generic Exception catch
+            }
+
+            if (sigs.size() > pubkeys.size()) {
+                valid = false;
+                break;
+            }
+        }
+
+        // We uselessly remove a stack object to emulate a Bitcoin Core bug.
+        byte[] nullDummy = stack.pollLast();
+        if (verifyFlags.contains(VerifyFlag.NULLDUMMY) && nullDummy.length > 0)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "OP_CHECKMULTISIG(VERIFY) with non-null nulldummy: " + Arrays.toString(nullDummy));
+
+        if (opcode == OP_CHECKMULTISIG) {
+            stack.add(valid ? new byte[] {1} : new byte[] {});
+        } else if (opcode == OP_CHECKMULTISIGVERIFY) {
+            if (!valid)
+                throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "Script failed OP_CHECKMULTISIGVERIFY");
+        }
+        return opCount;
     }
 
 
