@@ -23,8 +23,10 @@ import org.twostack.bitcoin.Address;
 import org.twostack.bitcoin.ECKey;
 import org.twostack.bitcoin.PublicKey;
 import org.twostack.bitcoin.exception.AddressFormatException;
+import org.twostack.bitcoin.params.AddressType;
 import org.twostack.bitcoin.params.NetworkAddressType;
 import org.twostack.bitcoin.params.NetworkParameters;
+import org.twostack.bitcoin.params.NetworkType;
 import org.twostack.bitcoin.script.Script.ScriptType;
 
 import javax.annotation.Nullable;
@@ -52,8 +54,8 @@ public class LegacyAddress extends Address {
 
 
     /**
-     * Private constructor. Use {@link #fromBase58(NetworkAddressType, String)},
-     * {@link #fromPubKeyHash(NetworkAddressType, byte[])}, {@link #fromScriptHash(NetworkAddressType, byte[])} or
+     * Private constructor. Use {@link #fromBase58(NetworkType, String)},
+     * {@link #fromPubKeyHash(NetworkAddressType, byte[])}, {@link #fromScriptHash(NetworkType, byte[])} or
      * {@link #fromKey(NetworkAddressType, PublicKey)}.
      *
      * @param addressType
@@ -102,20 +104,26 @@ public class LegacyAddress extends Address {
     /**
      * Construct a {@link LegacyAddress} that represents the given P2SH script hash.
      * 
-     * @param networkAddressType
+     * @param networkType
      *            network this address is valid for
      * @param hash160
      *            P2SH script hash
      * @return constructed address
      */
-    public static LegacyAddress fromScriptHash(NetworkAddressType networkAddressType, byte[] hash160) throws AddressFormatException {
-        return new LegacyAddress(networkAddressType, true, hash160);
+    public static LegacyAddress fromScriptHash(NetworkType networkType, byte[] hash160) throws AddressFormatException {
+
+        if (networkType == NetworkType.MAIN){
+            return new LegacyAddress(NetworkAddressType.MAIN_P2SH, true, hash160);
+        }else{
+            return new LegacyAddress(NetworkAddressType.TEST_P2SH, true, hash160);
+        }
+
     }
 
     /**
      * Construct a {@link LegacyAddress} from its base58 form.
      * 
-     * @param networkAddressType
+     * @param networkType
      *            expected network this address is valid for, or null if if the network should be derived from the
      *            base58
      * @param base58
@@ -125,17 +133,30 @@ public class LegacyAddress extends Address {
      * @throws AddressFormatException.WrongNetwork
      *             if the given address is valid but for a different chain (eg testnet vs mainnet)
      */
-    public static LegacyAddress fromBase58(@Nullable NetworkAddressType networkAddressType, String base58)
+    public static LegacyAddress fromBase58(@Nullable NetworkType networkType, String base58)
             throws AddressFormatException {
         byte[] versionAndDataBytes = Base58.decodeChecked(base58);
         int version = versionAndDataBytes[0] & 0xFF;
         byte[] bytes = Arrays.copyOfRange(versionAndDataBytes, 1, versionAndDataBytes.length);
 
-        if (networkAddressType == null) {
+        if (networkType == null) {
             NetworkAddressType derivedType = NetworkParameters.getNetworkAddressType(version);
             return new LegacyAddress(derivedType, false, bytes);
         } else {
-            return new LegacyAddress(networkAddressType, true, bytes);
+
+            AddressType versionType = NetworkParameters.getAddressType(version);
+            NetworkAddressType versionAddressType = NetworkParameters.getNetworkAddressType(version);
+
+            if (! NetworkParameters.getNetworkTypes(version).contains(networkType))
+                throw new AddressFormatException.WrongNetwork(version);
+
+            if (versionType == AddressType.PUBKEY_HASH){
+                return new LegacyAddress(versionAddressType, false, bytes);
+            }else if(versionType == AddressType.SCRIPT_HASH){
+                return new LegacyAddress(versionAddressType, true, bytes);
+            }
+
+            throw new AddressFormatException.WrongNetwork(version);
         }
 
     }

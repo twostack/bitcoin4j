@@ -33,6 +33,7 @@ import org.twostack.bitcoin.Address;
 import org.twostack.bitcoin.address.LegacyAddress;
 import org.twostack.bitcoin.exception.*;
 import org.twostack.bitcoin.params.NetworkAddressType;
+import org.twostack.bitcoin.params.NetworkType;
 import org.twostack.bitcoin.script.Interpreter;
 import org.twostack.bitcoin.script.Script;
 
@@ -71,8 +72,8 @@ public class TransactionTest {
     public void can_create_and_sign_transaction() throws InvalidKeyException, TransactionException, IOException, SigHashException {
 
         PrivateKey privateKey = PrivateKey.fromWIF("cVVvUsNHhbrgd7aW3gnuGo2qJM45LhHhTCVXrDSJDDcNGE6qmyCs");
-        Address changeAddress = Address.fromString(NetworkAddressType.TEST_PKH, "mu4DpTaD75nheE4z5CQazqm1ivej1vzL4L"); // my address
-        Address recipientAddress = Address.fromString(NetworkAddressType.TEST_PKH, "n3aZKucfWmXeXhX13MREQQnqNfbrWiYKtg"); //bitcoin-cli address
+        Address changeAddress = Address.fromString(NetworkType.TEST, "mu4DpTaD75nheE4z5CQazqm1ivej1vzL4L"); // my address
+        Address recipientAddress = Address.fromString(NetworkType.TEST, "n3aZKucfWmXeXhX13MREQQnqNfbrWiYKtg"); //bitcoin-cli address
 
         //Create a Transaction instance from the RAW transaction data create by bitcoin-cli.
         //this transaction contains the UTXO we are interested in
@@ -144,7 +145,7 @@ public class TransactionTest {
                 String toAddress = txOutNode.get(0).textValue();
                 int spendAmount = txOutNode.get(1).asInt();
 
-                builder.spendTo(new P2PKHLockBuilder(LegacyAddress.fromString(NetworkAddressType.MAIN_PKH, toAddress)) , BigInteger.valueOf(spendAmount));
+                builder.spendTo(new P2PKHLockBuilder(LegacyAddress.fromString(NetworkType.TEST, toAddress)) , BigInteger.valueOf(spendAmount));
             }
 
             //signature

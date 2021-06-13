@@ -21,6 +21,7 @@ import org.twostack.bitcoin.address.PrefixedChecksummedBytes;
 import org.twostack.bitcoin.exception.AddressFormatException;
 import org.twostack.bitcoin.params.NetworkAddressType;
 import org.twostack.bitcoin.params.NetworkParameters;
+import org.twostack.bitcoin.params.NetworkType;
 import org.twostack.bitcoin.script.Script.ScriptType;
 
 import javax.annotation.Nullable;
@@ -31,7 +32,7 @@ import javax.annotation.Nullable;
  * </p>
  *
  * <p>
- * Use {@link #fromString(NetworkAddressType, String)} to conveniently construct any kind of address from its textual
+ * Use {@link #fromString(networkType, String)} to conveniently construct any kind of address from its textual
  * form.
  * </p>
  */
@@ -47,7 +48,7 @@ public abstract class Address extends PrefixedChecksummedBytes implements Compar
     /**
      * Construct an address from its textual form.
      *
-     * @param addressType
+     * @param networkType
      *            the expected network this address is valid for, or null if the network should be derived from the
      *            textual form
      * @param str
@@ -59,8 +60,8 @@ public abstract class Address extends PrefixedChecksummedBytes implements Compar
      * @throws AddressFormatException.WrongNetwork
      *             if the given string is valid but not for the expected network (eg testnet vs mainnet)
      */
-    public static Address fromString(@Nullable NetworkAddressType addressType, String str) throws AddressFormatException {
-        return LegacyAddress.fromBase58(addressType, str);
+    public static Address fromString(@Nullable NetworkType networkType, String str) throws AddressFormatException {
+        return LegacyAddress.fromBase58(networkType, str);
     }
 
     /**

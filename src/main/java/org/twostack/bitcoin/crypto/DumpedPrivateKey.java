@@ -54,7 +54,7 @@ public class DumpedPrivateKey extends PrefixedChecksummedBytes {
         byte[] bytes = Arrays.copyOfRange(versionAndDataBytes, 1, versionAndDataBytes.length);
         if (networkType == null) {
             for (NetworkType n : NetworkType.values())
-                if (version == NetworkParameters.getDumpedPrivateKeyHeader(networkType))
+                if (version == NetworkParameters.getDumpedPrivateKeyHeader(n))
                     return new DumpedPrivateKey(n, bytes);
             throw new AddressFormatException.InvalidPrefix("No network found for version " + version);
         } else {

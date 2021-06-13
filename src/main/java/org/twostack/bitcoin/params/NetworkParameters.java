@@ -49,7 +49,6 @@ public class NetworkParameters {
             }
     }
 
-    //FIXME: These headers are used for serializing. We don't have TESTNET serialization a.t.m
     /** Returns the 4 byte header for BIP32 wallet P2PKH - private key part. */
     public static int getBip32HeaderP2PKHpriv(NetworkType networkType) {
         switch (networkType) {
