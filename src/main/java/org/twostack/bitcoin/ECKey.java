@@ -41,8 +41,6 @@ import org.bouncycastle.util.Properties;
 import org.bouncycastle.util.encoders.Base64;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.twostack.bitcoin.address.Address;
-import org.twostack.bitcoin.address.LegacyAddress;
 import org.twostack.bitcoin.ecc.NativeSecp256k1;
 import org.twostack.bitcoin.ecc.NativeSecp256k1Util;
 import org.twostack.bitcoin.ecc.Secp256k1Context;
@@ -50,7 +48,7 @@ import org.twostack.bitcoin.crypto.LinuxSecureRandom;
 import org.twostack.bitcoin.exception.SignatureDecodeException;
 import org.twostack.bitcoin.crypto.*;
 import org.twostack.bitcoin.params.NetworkParameters;
-import org.twostack.bitcoin.script.Script;
+import org.twostack.bitcoin.params.NetworkType;
 
 import javax.annotation.Nullable;
 import java.io.ByteArrayOutputStream;
@@ -1005,6 +1003,28 @@ public class ECKey {
     public byte[] getPrivKeyBytes() {
         return Utils.bigIntegerToBytes(getPrivKey(), 32);
     }
+
+    /**
+     * Returns the creation time of this key or zero if the key was deserialized from a version that did not store
+     * that data.
+     */
+    public long getCreationTimeSeconds() {
+        return creationTimeSeconds;
+    }
+
+
+    /**
+     * Exports the private key in the form used by Bitcoin Core's "dumpprivkey" and "importprivkey" commands. Use
+     * the {@link DumpedPrivateKey#toString()} method to get the string.
+     *
+     * @param networkType The network this key is intended for use on.
+     * @return Private key bytes as a {@link DumpedPrivateKey}.
+     * @throws IllegalStateException if the private key is not available.
+     */
+    public DumpedPrivateKey getPrivateKeyEncoded(NetworkType networkType) {
+        return new DumpedPrivateKey(networkType, getPrivKeyBytes(), isCompressed());
+    }
+
 
 
     /**

@@ -20,11 +20,10 @@ package org.twostack.bitcoin.script;
 
 import org.twostack.bitcoin.ECKey;
 import org.twostack.bitcoin.Utils;
-import org.twostack.bitcoin.address.Address;
+import org.twostack.bitcoin.Address;
 import org.twostack.bitcoin.address.LegacyAddress;
 import org.twostack.bitcoin.script.Script.ScriptType;
 
-import javax.annotation.Nullable;
 import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;

@@ -1,7 +1,6 @@
 package org.twostack.bitcoin.transaction;
 
-import org.twostack.bitcoin.Utils;
-import org.twostack.bitcoin.address.Address;
+import org.twostack.bitcoin.Address;
 import org.twostack.bitcoin.exception.TransactionException;
 import org.twostack.bitcoin.script.Script;
 

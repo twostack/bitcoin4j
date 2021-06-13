@@ -29,18 +29,16 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.twostack.bitcoin.*;
-import org.twostack.bitcoin.address.Address;
+import org.twostack.bitcoin.Address;
 import org.twostack.bitcoin.address.LegacyAddress;
 import org.twostack.bitcoin.exception.*;
 import org.twostack.bitcoin.params.NetworkAddressType;
 import org.twostack.bitcoin.script.Interpreter;
 import org.twostack.bitcoin.script.Script;
-import org.twostack.bitcoin.script.ScriptOpCodes;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigInteger;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 

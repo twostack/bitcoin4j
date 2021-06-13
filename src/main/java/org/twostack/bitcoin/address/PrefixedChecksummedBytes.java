@@ -18,8 +18,13 @@
 package org.twostack.bitcoin.address;
 
 import org.twostack.bitcoin.params.NetworkAddressType;
+import org.twostack.bitcoin.params.NetworkType;
 
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -39,24 +44,25 @@ import static com.google.common.base.Preconditions.checkNotNull;
  * </p>
  */
 public abstract class PrefixedChecksummedBytes implements Serializable, Cloneable {
-    protected final transient NetworkAddressType networkAddressType;
+    protected final transient NetworkType networkType;
     protected final byte[] bytes;
 
-    protected PrefixedChecksummedBytes(NetworkAddressType networkAddressType, byte[] bytes) {
-        this.networkAddressType = checkNotNull(networkAddressType);
+    protected PrefixedChecksummedBytes(NetworkType networkType, byte[] bytes) {
+        this.networkType = checkNotNull(networkType);
         this.bytes = checkNotNull(bytes);
     }
 
     /**
      * @return network this data is valid for
      */
-    public final NetworkAddressType getNetworkAddressType() {
-        return networkAddressType;
+    public final NetworkType getNetworkType(){
+        return networkType;
     }
+
 
     @Override
     public int hashCode() {
-        return Objects.hash(networkAddressType, Arrays.hashCode(bytes));
+        return Objects.hash(networkType, Arrays.hashCode(bytes));
     }
 
     @Override
@@ -64,7 +70,7 @@ public abstract class PrefixedChecksummedBytes implements Serializable, Cloneabl
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         PrefixedChecksummedBytes other = (PrefixedChecksummedBytes) o;
-        return this.networkAddressType.equals(other.networkAddressType) && Arrays.equals(this.bytes, other.bytes);
+        return this.networkType.equals(other.networkType) && Arrays.equals(this.bytes, other.bytes);
     }
 
     /**
@@ -78,21 +84,21 @@ public abstract class PrefixedChecksummedBytes implements Serializable, Cloneabl
     }
 
     // Java serialization
-//
-//    private void writeObject(ObjectOutputStream out) throws IOException {
-//        out.defaultWriteObject();
-//        out.writeUTF(params.getId());
-//    }
 
-//    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
-//        in.defaultReadObject();
-//        try {
-//            Field paramsField = PrefixedChecksummedBytes.class.getDeclaredField("params");
-//            paramsField.setAccessible(true);
-//            paramsField.set(this, checkNotNull(NetworkParameters.fromID(in.readUTF())));
-//            paramsField.setAccessible(false);
-//        } catch (NoSuchFieldException | IllegalAccessException x) {
-//            throw new RuntimeException(x);
-//        }
-//    }
+    private void writeObject(ObjectOutputStream out) throws IOException {
+        out.defaultWriteObject();
+        out.writeUTF(networkType.name());
+    }
+
+    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        in.defaultReadObject();
+        try {
+            Field paramsField = PrefixedChecksummedBytes.class.getDeclaredField("networkType");
+            paramsField.setAccessible(true);
+            paramsField.set(this, checkNotNull(NetworkType.valueOf(in.readUTF())));
+            paramsField.setAccessible(false);
+        } catch (NoSuchFieldException | IllegalAccessException x) {
+            throw new RuntimeException(x);
+        }
+    }
 }

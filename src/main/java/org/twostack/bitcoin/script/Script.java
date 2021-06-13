@@ -19,23 +19,11 @@
 
 package org.twostack.bitcoin.script;
 
-import com.google.common.io.BaseEncoding;
-import org.bouncycastle.crypto.digests.RIPEMD160Digest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.twostack.bitcoin.ECKey;
-import org.twostack.bitcoin.Sha256Hash;
 import org.twostack.bitcoin.UnsafeByteArrayOutputStream;
 import org.twostack.bitcoin.Utils;
-import org.twostack.bitcoin.address.Address;
-import org.twostack.bitcoin.address.LegacyAddress;
-import org.twostack.bitcoin.exception.ProtocolException;
-import org.twostack.bitcoin.exception.SignatureDecodeException;
-import org.twostack.bitcoin.exception.VerificationException;
-import org.twostack.bitcoin.params.NetworkParameters;
-import org.twostack.bitcoin.transaction.Transaction;
-import org.twostack.bitcoin.transaction.TransactionInput;
-import org.twostack.bitcoin.transaction.TransactionOutput;
 
 import javax.annotation.Nullable;
 import java.io.ByteArrayInputStream;
@@ -43,12 +31,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigInteger;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.twostack.bitcoin.script.ScriptOpCodes.*;

@@ -15,6 +15,10 @@ public class PublicKey {
        return new PublicKey(ECKey.fromPublicOnly(pubkeyBytes));
     }
 
+    public static PublicKey fromBytes(byte[] pubkeyBytes){
+        return new PublicKey(ECKey.fromPublicOnly(pubkeyBytes));
+    }
+
     public byte[] getPubKeyHash(){
         return key.getPubKeyHash();
     }

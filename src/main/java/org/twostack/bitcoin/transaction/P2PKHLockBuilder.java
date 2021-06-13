@@ -1,7 +1,7 @@
 package org.twostack.bitcoin.transaction;
 
 import org.twostack.bitcoin.PublicKey;
-import org.twostack.bitcoin.address.Address;
+import org.twostack.bitcoin.Address;
 import org.twostack.bitcoin.params.NetworkAddressType;
 import org.twostack.bitcoin.script.*;
 

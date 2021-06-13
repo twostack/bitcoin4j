@@ -19,12 +19,12 @@
 package org.twostack.bitcoin.address;
 
 import com.google.common.primitives.UnsignedBytes;
+import org.twostack.bitcoin.Address;
 import org.twostack.bitcoin.ECKey;
 import org.twostack.bitcoin.PublicKey;
 import org.twostack.bitcoin.exception.AddressFormatException;
 import org.twostack.bitcoin.params.NetworkAddressType;
 import org.twostack.bitcoin.params.NetworkParameters;
-import org.twostack.bitcoin.params.NetworkType;
 import org.twostack.bitcoin.script.Script.ScriptType;
 
 import javax.annotation.Nullable;
@@ -46,6 +46,7 @@ public class LegacyAddress extends Address {
      * An address is a RIPEMD160 hash of a public key, therefore is always 160 bits or 20 bytes.
      */
     public static final int LENGTH = 20;
+
 
     /**
      * Private constructor. Use {@link #fromBase58(NetworkAddressType, String)},
