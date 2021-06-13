@@ -34,7 +34,7 @@ import java.util.*;
 
 import static org.twostack.bitcoin.Utils.HEX;
 import static org.junit.Assert.*;
-import static org.twostack.bitcoin.util.TestUtil.parseScriptString;
+import static org.twostack.bitcoin.utils.TestUtil.parseScriptString;
 
 public class ScriptTest {
     // From tx 05e04c26c12fe408a3c1b71aa7996403f6acad1045252b1c62e055496f4d2cb1 on the testnet.

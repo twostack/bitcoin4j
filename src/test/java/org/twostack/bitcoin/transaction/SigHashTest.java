@@ -6,18 +6,14 @@ import com.google.common.base.Charsets;
 import org.junit.Test;
 import org.twostack.bitcoin.Utils;
 import org.twostack.bitcoin.exception.SigHashException;
-import org.twostack.bitcoin.script.Interpreter;
 import org.twostack.bitcoin.script.Script;
-import org.twostack.bitcoin.script.ScriptException;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.util.Arrays;
-import java.util.Set;
 
 import static org.junit.Assert.assertTrue;
-import static org.twostack.bitcoin.util.TestUtil.parseScriptString;
 
 public class SigHashTest {
 

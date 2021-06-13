@@ -44,7 +44,7 @@ import java.util.*;
 
 import static org.junit.Assert.*;
 import static org.twostack.bitcoin.Utils.HEX;
-import static org.twostack.bitcoin.util.TestUtil.parseScriptString;
+import static org.twostack.bitcoin.utils.TestUtil.parseScriptString;
 
 /**
  * Just check the Transaction.verify() method. Most methods that have complicated logic in Transaction are tested

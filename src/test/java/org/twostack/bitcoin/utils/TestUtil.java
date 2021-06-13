@@ -1,4 +1,4 @@
-package org.twostack.bitcoin.util;
+package org.twostack.bitcoin.utils;
 
 import org.twostack.bitcoin.UnsafeByteArrayOutputStream;
 import org.twostack.bitcoin.Utils;

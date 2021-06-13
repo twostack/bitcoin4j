@@ -1108,9 +1108,9 @@ public class ECKey {
         return Utils.HEX.encode(pub.getEncoded());
     }
 
-//    public String getPrivateKeyAsWiF(NetworkParameters params) {
-//        return getPrivateKeyEncoded(params).toString();
-//    }
+    public String getPrivateKeyAsWiF(NetworkType networkType) {
+        return getPrivateKeyEncoded(networkType).toString();
+    }
 
     private String toString(boolean includePrivate, @Nullable KeyParameter aesKey, @Nullable NetworkParameters params) {
         final MoreObjects.ToStringHelper helper = MoreObjects.toStringHelper(this).omitNullValues();

@@ -47,22 +47,28 @@ public class LegacyAddress extends Address {
      */
     public static final int LENGTH = 20;
 
+    /** True if P2SH, false if P2PKH. */
+    public final boolean p2sh;
+
 
     /**
      * Private constructor. Use {@link #fromBase58(NetworkAddressType, String)},
-     * {@link #fromPubKeyHash(NetworkAddressType, byte[])},
+     * {@link #fromPubKeyHash(NetworkAddressType, byte[])}, {@link #fromScriptHash(NetworkAddressType, byte[])} or
      * {@link #fromKey(NetworkAddressType, PublicKey)}.
-     * 
-     * @param networkAddressType
+     *
+     * @param addressType
      *            network this address is valid for
+     * @param p2sh
+     *            true if hash160 is hash of a script, false if it is hash of a pubkey
      * @param hash160
      *            20-byte hash of pubkey or script
      */
-    private LegacyAddress(NetworkAddressType networkAddressType, byte[] hash160) throws AddressFormatException {
-        super(networkAddressType, hash160);
+    private LegacyAddress(NetworkAddressType addressType, boolean p2sh, byte[] hash160) throws AddressFormatException {
+        super(addressType, hash160);
         if (hash160.length != 20)
             throw new AddressFormatException.InvalidDataLength(
                     "Legacy addresses are 20 byte (160 bit) hashes, but got: " + hash160.length);
+        this.p2sh = p2sh;
     }
 
     /**
@@ -76,7 +82,7 @@ public class LegacyAddress extends Address {
      * @return constructed address
      */
     public static LegacyAddress fromPubKeyHash(NetworkAddressType networkAddressType, byte[] hash160) throws AddressFormatException {
-        return new LegacyAddress(networkAddressType, hash160);
+        return new LegacyAddress(networkAddressType, false, hash160);
     }
 
     /**
@@ -96,15 +102,15 @@ public class LegacyAddress extends Address {
     /**
      * Construct a {@link LegacyAddress} that represents the given P2SH script hash.
      * 
-     * @param networkType
+     * @param networkAddressType
      *            network this address is valid for
      * @param hash160
      *            P2SH script hash
      * @return constructed address
      */
-//    public static LegacyAddress fromScriptHash(NetworkAddressType networkAddressType, byte[] hash160) throws AddressFormatException {
-//        return new LegacyAddress(networkType, true, hash160);
-//    }
+    public static LegacyAddress fromScriptHash(NetworkAddressType networkAddressType, byte[] hash160) throws AddressFormatException {
+        return new LegacyAddress(networkAddressType, true, hash160);
+    }
 
     /**
      * Construct a {@link LegacyAddress} from its base58 form.
@@ -127,9 +133,9 @@ public class LegacyAddress extends Address {
 
         if (networkAddressType == null) {
             NetworkAddressType derivedType = NetworkParameters.getNetworkAddressType(version);
-            return new LegacyAddress(derivedType, bytes);
+            return new LegacyAddress(derivedType, false, bytes);
         } else {
-            return new LegacyAddress(networkAddressType, bytes);
+            return new LegacyAddress(networkAddressType, true, bytes);
         }
 
     }
@@ -171,6 +177,19 @@ public class LegacyAddress extends Address {
         }else{
             return ScriptType.P2PKH;
         }
+    }
+
+
+    /**
+     * Given an address, examines the version byte and attempts to find a matching NetworkParameters. If you aren't sure
+     * which network the address is intended for (eg, it was provided by a user), you can use this to decide if it is
+     * compatible with the current wallet.
+     *
+     * @return network the address is valid for
+     * @throws AddressFormatException if the given base58 doesn't parse or the checksum is invalid
+     */
+    public static NetworkAddressType getNetworkFromAddress(String address) throws AddressFormatException {
+        return LegacyAddress.fromBase58(null, address).networkAddressType;
     }
 
     /**
