@@ -24,6 +24,7 @@ import java.io.Serializable;
 import java.math.BigDecimal;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static org.twostack.bitcoin.transaction.Transaction.MAX_COINS;
 
 /**
  * Represents a monetary Bitcoin value. This class is immutable.
@@ -35,6 +36,7 @@ public final class Coin implements Monetary, Comparable<Coin>, Serializable {
      * constants derive from it.
      */
     public static final int SMALLEST_UNIT_EXPONENT = 8;
+
 
     /**
      * The number of satoshis equal to one bitcoin.
@@ -126,6 +128,76 @@ public final class Coin implements Monetary, Comparable<Coin>, Serializable {
     public static Coin parseCoin(final String str) {
         try {
             long satoshis = new BigDecimal(str).movePointRight(SMALLEST_UNIT_EXPONENT).toBigIntegerExact().longValue();
+            return Coin.valueOf(satoshis);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException(e); // Repackage exception to honor method contract
+        }
+    }
+
+    /**
+     * Convert a decimal amount of BTC into satoshis.
+     *
+     * @param coins number of coins
+     * @return number of satoshis
+     */
+    public static long btcToSatoshi(BigDecimal coins) {
+        return coins.movePointRight(SMALLEST_UNIT_EXPONENT).longValueExact();
+    }
+
+    /**
+     * Convert an amount in satoshis to an amount in BTC.
+     *
+     * @param satoshis number of satoshis
+     * @return number of bitcoins (in BTC)
+     */
+    public static BigDecimal satoshiToBtc(long satoshis) {
+        return new BigDecimal(satoshis).movePointLeft(SMALLEST_UNIT_EXPONENT);
+    }
+
+    /**
+     * Create a {@code Coin} from a decimal amount of BTC.
+     *
+     * @param coins number of coins (in BTC)
+     * @return {@code Coin} object containing value in satoshis
+     */
+    public static Coin ofBtc(BigDecimal coins) {
+        return Coin.valueOf(btcToSatoshi(coins));
+    }
+
+    /**
+     * Create a {@code Coin} from a long integer number of satoshis.
+     *
+     * @param satoshis number of satoshis
+     * @return {@code Coin} object containing value in satoshis
+     */
+    public static Coin ofSat(long satoshis) {
+        return Coin.valueOf(satoshis);
+    }
+
+
+
+    /**
+     * Convert to number of bitcoin (in BTC)
+     *
+     * @return decimal number of bitcoin (in BTC)
+     */
+    public BigDecimal toBtc() {
+        return satoshiToBtc(this.value);
+    }
+
+    /**
+     * Create a {@code Coin} by parsing a {@code String} amount expressed in "the way humans are used to".
+     * The amount is cut to satoshi precision.
+     *
+     * @param str string in a format understood by {@link BigDecimal#BigDecimal(String)}, for example "0", "1", "0.10",
+     *      * "1.23E3", "1234.5E-5".
+     * @return {@code Coin} object containing value in satoshis
+     * @throws IllegalArgumentException
+     *             if you try to specify a value out of range.
+     */
+    public static Coin parseCoinInexact(final String str) {
+        try {
+            long satoshis = new BigDecimal(str).movePointRight(SMALLEST_UNIT_EXPONENT).longValue();
             return Coin.valueOf(satoshis);
         } catch (ArithmeticException e) {
             throw new IllegalArgumentException(e); // Repackage exception to honor method contract
