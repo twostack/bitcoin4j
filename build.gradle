@@ -40,11 +40,11 @@ publishing {
             def releaseRepoUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
             def snapshotRepoUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
 
-            url = version.endsWith('SNAPSHOT') ? releaseRepoUrl : snapshotRepoUrl
-            name = "Release"
+            url = version.endsWith('SNAPSHOT') ? snapshotRepoUrl : releaseRepoUrl
+            name = "OSSRH"
             credentials {
-                username = ossrhUsername
-                password = ossrhPassword
+                username = findProperty('ossrhUsername') ? ossrhUsername : ''
+                password = findProperty('ossrhPassword') ? ossrhPassword : ''
             }
         }
 
