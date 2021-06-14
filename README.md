@@ -1,4 +1,5 @@
 # Introduction
+![Java CI](https://github.com/twostack/bitcoin4j/workflows/Java%20CI%20with%20Gradle/badge.svg)
 
 ## Overview
 
