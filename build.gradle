@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'org.twostack'
-version '1.0.0-SNAPSHOT'
+version '1.1.0-SNAPSHOT'
 
 repositories {
     mavenCentral()
@@ -37,7 +37,7 @@ publishing {
 
     repositories {
         maven {
-            def releaseRepoUrl = "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
+            def releaseRepoUrl = "https://s01.oss.sonatype.org/content/repositories/releases/"
             def snapshotRepoUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
 
             url = version.endsWith('SNAPSHOT') ? snapshotRepoUrl : releaseRepoUrl

@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-abstract class UnlockingScriptBuilder {
+public abstract class UnlockingScriptBuilder {
 
     List<TransactionSignature> signatures = new ArrayList<>();
 

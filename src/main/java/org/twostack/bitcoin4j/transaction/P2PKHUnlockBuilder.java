@@ -27,11 +27,11 @@ public class P2PKHUnlockBuilder extends UnlockingScriptBuilder {
 
     PublicKey signerPubkey;
 
-    P2PKHUnlockBuilder(Script script) throws SignatureDecodeException {
+    public P2PKHUnlockBuilder(Script script) throws SignatureDecodeException {
         parse(script);
     }
 
-    P2PKHUnlockBuilder(PublicKey publicKey) {
+    public P2PKHUnlockBuilder(PublicKey publicKey) {
         this.signerPubkey = publicKey;
     }
 

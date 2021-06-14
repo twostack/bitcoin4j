@@ -27,8 +27,6 @@ public class TransactionOutput {
 
     private BigInteger satoshis = BigInteger.ZERO;
 
-//    private int outputIndex;
-
     private LockingScriptBuilder _lockingScriptBuilder;
 
     public static TransactionOutput fromReader(ReadUtils reader) {
@@ -37,7 +35,7 @@ public class TransactionOutput {
         int size = reader.readVarInt().intValue();
         Script script;
         if (size != 0) {
-            script = Script.fromByteArray(reader.readBytes(size)); //FIXME: ensure a copy is taken
+            script = Script.fromByteArray(reader.readBytes(size));
         } else {
             script = new ScriptBuilder().build();
         }
@@ -50,9 +48,7 @@ public class TransactionOutput {
         this._lockingScriptBuilder = builder;
     }
 
-
-    /// The default constructor. Initializes a "clean slate" output.
-    TransactionOutput(BigInteger satoshis, Script script){
+    public TransactionOutput(BigInteger satoshis, Script script){
         this.satoshis = satoshis;
         this._lockingScriptBuilder = new DefaultLockBuilder(script);
     }
@@ -81,14 +77,6 @@ public class TransactionOutput {
         writer.writeBytes(outputScript, outputScript.length);
         return writer.getBytes();
     }
-
-//    public int getOutputIndex() {
-//        return outputIndex;
-//    }
-//
-//    public void setOutputIndex(int outputIndex) {
-//        this.outputIndex = outputIndex;
-//    }
 
     public Script getScript() {
         return _lockingScriptBuilder.getScriptPubkey();

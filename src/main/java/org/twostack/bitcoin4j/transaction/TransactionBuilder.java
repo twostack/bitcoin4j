@@ -113,18 +113,36 @@ public class TransactionBuilder {
 
     }
 
-//    public TransactionBuilder spendFromOutput(byte[] utxoTxnId, TransactionOutput utxo, long sequenceNumber, P2PKHUnlockBuilder unlocker) {
-//
-//        TransactionInput input = new TransactionInput(
-//                utxoTxnId,
-//                utxo.getOutputIndex(),
-//                sequenceNumber,
-//                unlocker
-//        );
-//
-//        inputs.add(input);
-//        return this;
-//    }
+    public TransactionBuilder spendFromOutpoint(TransactionOutpoint outpoint, long sequenceNumber, UnlockingScriptBuilder unlocker) {
+
+        TransactionInput input = new TransactionInput(
+                HEX.decode(outpoint.getTransactionId()),
+                outpoint.getOutputIndex(),
+                sequenceNumber,
+                unlocker
+        );
+
+        spendingMap.put(outpoint.getTransactionId(), outpoint.getSatoshis());
+
+        inputs.add(input);
+        return this;
+    }
+
+
+    public TransactionBuilder spendFromOutput(String utxoTxnId, int outputIndex, BigInteger amount, long sequenceNumber, UnlockingScriptBuilder unlocker) {
+
+        TransactionInput input = new TransactionInput(
+                HEX.decode(utxoTxnId),
+                outputIndex,
+                sequenceNumber,
+                unlocker
+        );
+
+        spendingMap.put(utxoTxnId, amount);
+
+        inputs.add(input);
+        return this;
+    }
 
     public TransactionBuilder spendTo(LockingScriptBuilder locker, BigInteger satoshis) throws TransactionException{
 

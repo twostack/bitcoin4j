@@ -35,7 +35,7 @@ public class P2PKHLockBuilder extends LockingScriptBuilder{
         return new P2PKHLockBuilder(address);
     }
 
-    P2PKHLockBuilder(Address address){
+    public P2PKHLockBuilder(Address address){
         this.address = address;
 
         if (address != null) {
@@ -43,7 +43,7 @@ public class P2PKHLockBuilder extends LockingScriptBuilder{
         }
     }
 
-    P2PKHLockBuilder(Script script){
+    public P2PKHLockBuilder(Script script){
         parse(script);
     }
 
