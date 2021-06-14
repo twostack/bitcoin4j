@@ -74,8 +74,6 @@ public final class Fiat implements Monetary, Comparable<Fiat>, Serializable {
 
     /**
      * Parses an amount expressed in the way humans are used to.
-     * <p>
-     * <p/>
      * This takes string in a format understood by {@link BigDecimal#BigDecimal(String)}, for example "0", "1", "0.10",
      * "1.23E3", "1234.5E-5".
      * 

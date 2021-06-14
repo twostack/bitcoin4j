@@ -32,7 +32,7 @@ import javax.annotation.Nullable;
  * </p>
  *
  * <p>
- * Use {@link #fromString(networkType, String)} to conveniently construct any kind of address from its textual
+ * Use {@link #fromString(NetworkType, String)} to conveniently construct any kind of address from its textual
  * form.
  * </p>
  */

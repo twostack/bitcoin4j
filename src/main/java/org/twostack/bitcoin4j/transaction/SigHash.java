@@ -52,9 +52,11 @@ public class SigHash {
      * <p>Calculates a signature hash, that is, a hash of a simplified form of the transaction. How exactly the transaction
      * is simplified is specified by the type and anyoneCanPay parameters.</p>
      *
+     * <p>
      * When working with more complex transaction types and contracts, it can be necessary. When signing a P2SH output
      * the redeemScript should be the script encoded into the scriptSig field, for normal transactions, it's the
-     * scriptPubKey of the output you're signing for.</p>
+     * scriptPubKey of the output you're signing for.
+     * </p>
      *
      * @param unsignedTxn - The transaction to calculate the signature has for
      * @param sigHashType - The bitwise combination of [SighashType] flags
