@@ -259,7 +259,7 @@ public class Transaction {
             return new byte[]{};
         }
 
-        return txHash.array();
+        return Utils.reverseBytes(txHash.array());
     }
 
     public void addOutput(TransactionOutput output) {
