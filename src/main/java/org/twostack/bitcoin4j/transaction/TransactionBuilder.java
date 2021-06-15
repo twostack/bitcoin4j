@@ -40,7 +40,7 @@ public class TransactionBuilder {
 
     private final long DEFAULT_FEE_PER_KB = 512; //amount in satoshis
 
-    static final BigInteger DUST_AMOUNT = BigInteger.valueOf(546);
+    static final BigInteger DUST_AMOUNT = BigInteger.valueOf(256);
 
     /// Margin of error to allow fees in the vecinity of the expected value but doesn't allow a big difference
     private static final BigInteger FEE_SECURITY_MARGIN = BigInteger.valueOf(150);
@@ -264,6 +264,10 @@ public class TransactionBuilder {
         //add transaction outputs
         tx.addOutputs(outputs);
 
+        if (changeScriptBuilder != null) {
+            tx.addOutput(getChangeOutput());
+        }
+
         tx.setLockTime(nLockTime);
 
         return tx;
@@ -309,6 +313,12 @@ public class TransactionBuilder {
                 throw new TransactionException("You have outputs with spending values below the dust limit of " + DUST_AMOUNT.toString());
             }
         }
+
+        //check for dust on change output
+        if (getChangeOutput() != null && (getChangeOutput().getAmount().compareTo(DUST_AMOUNT) == -1)){
+            throw new TransactionException("You have a change output with spending value below the dust limit of " + DUST_AMOUNT.toString());
+        }
+
     }
 
 
@@ -358,6 +368,9 @@ public class TransactionBuilder {
         //spent amount equals input amount. No change generated. Return.
         if (calcRecipientTotals() == calcInputTotals()) return;
 
+        //clear change outputs
+        changeOutput = null;
+
         changeAmount = calculateChange();
         TransactionOutput output = getChangeOutput();
         output.setAmount(changeAmount);
@@ -399,6 +412,13 @@ public class TransactionBuilder {
 
         BigInteger fee = BigInteger.valueOf(new Float(size / 1000 * feePerKb).longValue());
 
+        //if fee is less that 256, set fee at 256 satoshis
+        //this is current minimum we set automatically if no explicit fee given
+        //FIXME: Make this configurable
+        if (fee.compareTo(BigInteger.valueOf(256)) == -1){
+            fee = BigInteger.valueOf(256);
+        }
+
         return fee;
     }
 
@@ -432,6 +452,12 @@ public class TransactionBuilder {
         for (TransactionOutput output: outputs) {
             amount = amount.add(output.getAmount());
         };
+
+        //deduct change output
+        if (changeScriptBuilder != null){
+            TransactionOutput changeOutput = getChangeOutput();
+            amount = amount.add(changeOutput.getAmount());
+        }
 
         return amount;
     }

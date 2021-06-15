@@ -155,6 +155,7 @@ public class TransactionTest {
             //txHex
             String serializedTx = serializedTxNode.asText();
 
+            System.out.println(txId);
 
             builder.spendFromUtxoMap(utxoMap, new P2PKHUnlockBuilder(privateKey.getPublicKey()));
             builder.withFeePerKb(100000);
