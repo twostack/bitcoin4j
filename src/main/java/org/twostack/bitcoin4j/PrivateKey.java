@@ -44,6 +44,8 @@ public class PrivateKey {
         return sig.encodeToDER();
     }
 
+
+    //FIXME: We can use DumpedPrivateKey to replace the internals here
     public static PrivateKey fromWIF(String wif) throws InvalidKeyException {
 
         boolean isCompressed = false;
@@ -80,6 +82,10 @@ public class PrivateKey {
         ECKey key = ECKey.fromPrivate(d);
 
         return new PrivateKey(key, isCompressed, networkType);
+    }
+
+    public String toWif(NetworkType networkType){
+        return this.key.getPrivateKeyAsWiF(networkType);
     }
 
 
