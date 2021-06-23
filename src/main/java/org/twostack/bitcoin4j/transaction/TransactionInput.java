@@ -78,7 +78,7 @@ public class TransactionInput {
         wu.writeBytes(Utils.reverseBytes(_prevTxnId), 32);
         wu.writeUint32LE(_prevTxnOutputIndex);
 
-        byte[] scriptBytes = _unlockingScriptBuilder.getScriptSig().getProgram();
+        byte[] scriptBytes = _unlockingScriptBuilder.getUnlockingScript().getProgram();
         VarInt vi = new VarInt(scriptBytes.length);
 
         wu.writeBytes(vi.encode(), vi.getSizeInBytes());
@@ -110,7 +110,7 @@ public class TransactionInput {
     }
 
     public Script getScriptSig() {
-        return _unlockingScriptBuilder.getScriptSig();
+        return _unlockingScriptBuilder.getUnlockingScript();
     }
 
     public UnlockingScriptBuilder getUnlockingScriptBuilder() {

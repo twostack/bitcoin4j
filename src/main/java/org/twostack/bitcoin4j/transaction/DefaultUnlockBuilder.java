@@ -34,7 +34,7 @@ public class DefaultUnlockBuilder extends UnlockingScriptBuilder {
     }
 
     @Override
-    public Script getScriptSig() {
+    public Script getUnlockingScript() {
         return script;
     }
 

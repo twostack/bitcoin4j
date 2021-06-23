@@ -154,7 +154,7 @@ public class TransactionBuilder {
         if (locker == null) {
             throw new TransactionException("LockingScriptBuilder cannot be null");
         }else{
-           script = locker.getScriptPubkey();
+           script = locker.getLockingScript();
         }
 
         TransactionOutput txnOutput = new TransactionOutput(satoshis, script);
@@ -378,7 +378,7 @@ public class TransactionBuilder {
 
     private TransactionOutput getChangeOutput(){
         if (changeOutput == null ){
-            changeOutput = new TransactionOutput(BigInteger.ZERO, changeScriptBuilder.getScriptPubkey());
+            changeOutput = new TransactionOutput(BigInteger.ZERO, changeScriptBuilder.getLockingScript());
         }
 
         return changeOutput;

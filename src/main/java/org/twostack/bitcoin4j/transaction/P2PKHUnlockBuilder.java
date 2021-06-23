@@ -57,7 +57,7 @@ public class P2PKHUnlockBuilder extends UnlockingScriptBuilder {
     }
 
     @Override
-    public Script getScriptSig() {
+    public Script getUnlockingScript() {
 
         List<TransactionSignature> signatures = getSignatures();
 

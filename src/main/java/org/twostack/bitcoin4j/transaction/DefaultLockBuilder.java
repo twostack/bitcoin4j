@@ -28,7 +28,7 @@ public class DefaultLockBuilder extends LockingScriptBuilder{
     }
 
     @Override
-    public Script getScriptPubkey() {
+    public Script getLockingScript() {
         return script;
     }
 }

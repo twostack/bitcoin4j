@@ -76,7 +76,7 @@ public class P2PKHLockBuilder extends LockingScriptBuilder{
     }
 
     @Override
-    public Script getScriptPubkey() {
+    public Script getLockingScript() {
 
         if (this.pubkeyHash == null) {
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Missing pubkeyHash. Can't construct the script.");
