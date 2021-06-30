@@ -6,10 +6,18 @@ plugins {
 }
 
 group 'org.twostack'
-version '1.4.0-SNAPSHOT'
+version '1.4.1-SNAPSHOT'
 
 repositories {
     mavenCentral()
+}
+
+compileJava {
+    options.encoding = "UTF-8"
+}
+
+javadoc {
+    options.encoding = "UTF-8"
 }
 
 java {

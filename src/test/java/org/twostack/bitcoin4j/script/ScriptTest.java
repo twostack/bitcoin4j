@@ -176,6 +176,8 @@ public class ScriptTest {
     }
 
 
+
+
     @Test
     public void dataDrivenValidScripts() throws Exception {
         JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
@@ -185,6 +187,7 @@ public class ScriptTest {
             Script scriptPubKey = parseScriptString(test.get(1).asText());
             Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
             try {
+
 
                 Interpreter interp = new Interpreter();
                 interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
