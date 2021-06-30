@@ -1,21 +1,89 @@
 package org.twostack.bitcoin4j.transaction;
 
+import org.junit.Test;
+import org.twostack.bitcoin4j.Address;
+import org.twostack.bitcoin4j.PrivateKey;
+import org.twostack.bitcoin4j.Utils;
+import org.twostack.bitcoin4j.exception.InvalidKeyException;
+import org.twostack.bitcoin4j.params.NetworkAddressType;
+import org.twostack.bitcoin4j.script.Script;
+import org.twostack.bitcoin4j.script.ScriptChunk;
+import org.twostack.bitcoin4j.script.ScriptOpCodes;
+
+import java.nio.ByteBuffer;
+import java.util.List;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
 public class LockUnlockBuilderTests {
 
+    PrivateKey privateKey = PrivateKey.fromWIF("KwoVx4zhcVeXqjGCk4nYGxk2EGP7PGqQUdmRBpKGHfFWmMPzTqZu");
+    String pubkeyScript = "OP_PUSHDATA1 32 0x2606168dabed7b4d11fdd242317adb480ee8c4fa7330db1a8b4f1c7749072aea OP_DROP OP_DUP OP_HASH160 20 0x581e5e328b0d34d724c09f123c050b341d11d96c OP_EQUALVERIFY OP_CHECKSIG";
+
+    byte[] smallTestData = Utils.HEX.decode("02000000016b748661a108dc35d8868a9a552b9364c6ee3f");
+    byte[] largeTestData = Utils.HEX.decode("02000000016b748661a108dc35d8868a9a552b9364c6ee3f06a4604f722882d49cdc4d13020000000048473044022073062451397fb5e7e2e02f1603e2a92677d516a5e747b1ae2ad0996387916d4302200ae2ec97d4525621cef07f75f0b92b5e83341761fa604c83daf0390a76d5024241feffffff0200e1f505000000001976a91494837d2d5d6106aa97db38957dcc294181ee91e988ac00021024010000001976a9144d991c88b4fd954ea62aa7182d3b3e251896a83188acd5000000");
+
+    public LockUnlockBuilderTests() throws InvalidKeyException {
+    }
+
+
+    @Test
+    public void testCreateSpendableDataLockerFromSmallData(){
+
+        Address address = Address.fromKey(NetworkAddressType.TEST_PKH, privateKey.getPublicKey());
+        P2PKHDataLockBuilder lockBuilder = new P2PKHDataLockBuilder(address, ByteBuffer.wrap(smallTestData));
+
+//        var scriptString = 'OP_PUSHDATA1 32 0x${commitHash} OP_DROP OP_DUP OP_HASH160 20 0x581e5e328b0d34d724c09f123c050b341d11d96c OP_EQUAL';
+        Script script = lockBuilder.getLockingScript();
+
+        List<ScriptChunk> chunks = script.getChunks();
+
+        assertEquals(7, chunks.size());
+        assertEquals(ScriptOpCodes.OP_DROP, chunks.get(1).opcode);
+        assertEquals(ScriptOpCodes.OP_DUP, chunks.get(2).opcode);
+        assertEquals(ScriptOpCodes.OP_HASH160, chunks.get(3).opcode);
+
+        assertEquals(Utils.HEX.encode(lockBuilder.getDataBuffer().array()), "02000000016b748661a108dc35d8868a9a552b9364c6ee3f");
+
+        //roundtrip it
+        String scriptString = "24 0x02000000016b748661a108dc35d8868a9a552b9364c6ee3f DROP DUP HASH160 20 0x2279837529828be4ae0110939ddbb8c15821cf50 EQUALVERIFY CHECKSIG";
+
+        Script lockingScript = Script.fromAsmString(scriptString);
+        P2PKHDataLockBuilder lockBuilder2 = new P2PKHDataLockBuilder(lockingScript);
+
+        assertEquals(Utils.HEX.encode(lockBuilder2.getDataBuffer().array()), "02000000016b748661a108dc35d8868a9a552b9364c6ee3f");
+    }
+
+    @Test
+    public void testCreateSpendableDataLockerFromLargeData(){
+
+        Address address = Address.fromKey(NetworkAddressType.TEST_PKH, privateKey.getPublicKey());
+        P2PKHDataLockBuilder lockBuilder = new P2PKHDataLockBuilder(address, ByteBuffer.wrap(largeTestData));
+
+        Script script = lockBuilder.getLockingScript();
+
+        List<ScriptChunk> chunks = script.getChunks();
+
+        System.out.println(script.toAsmString());
+        assertEquals(7, chunks.size());
+        assertEquals(ScriptOpCodes.OP_DROP, chunks.get(1).opcode);
+        assertEquals(ScriptOpCodes.OP_DUP, chunks.get(2).opcode);
+        assertEquals(ScriptOpCodes.OP_HASH160, chunks.get(3).opcode);
+
+        assertEquals(Utils.HEX.encode(lockBuilder.getDataBuffer().array()), "02000000016b748661a108dc35d8868a9a552b9364c6ee3f06a4604f722882d49cdc4d13020000000048473044022073062451397fb5e7e2e02f1603e2a92677d516a5e747b1ae2ad0996387916d4302200ae2ec97d4525621cef07f75f0b92b5e83341761fa604c83daf0390a76d5024241feffffff0200e1f505000000001976a91494837d2d5d6106aa97db38957dcc294181ee91e988ac00021024010000001976a9144d991c88b4fd954ea62aa7182d3b3e251896a83188acd5000000");
+
+        //roundtrip it
+        String scriptString = "PUSHDATA1 191 0x02000000016b748661a108dc35d8868a9a552b9364c6ee3f06a4604f722882d49cdc4d13020000000048473044022073062451397fb5e7e2e02f1603e2a92677d516a5e747b1ae2ad0996387916d4302200ae2ec97d4525621cef07f75f0b92b5e83341761fa604c83daf0390a76d5024241feffffff0200e1f505000000001976a91494837d2d5d6106aa97db38957dcc294181ee91e988ac00021024010000001976a9144d991c88b4fd954ea62aa7182d3b3e251896a83188acd5000000 DROP DUP HASH160 20 0x2279837529828be4ae0110939ddbb8c15821cf50 EQUALVERIFY CHECKSIG";
+
+        Script lockingScript = Script.fromAsmString(scriptString);
+        P2PKHDataLockBuilder lockBuilder2 = new P2PKHDataLockBuilder(lockingScript);
+
+        assertEquals(Utils.HEX.encode(lockBuilder2.getDataBuffer().array()), "02000000016b748661a108dc35d8868a9a552b9364c6ee3f06a4604f722882d49cdc4d13020000000048473044022073062451397fb5e7e2e02f1603e2a92677d516a5e747b1ae2ad0996387916d4302200ae2ec97d4525621cef07f75f0b92b5e83341761fa604c83daf0390a76d5024241feffffff0200e1f505000000001976a91494837d2d5d6106aa97db38957dcc294181ee91e988ac00021024010000001976a9144d991c88b4fd954ea62aa7182d3b3e251896a83188acd5000000");
+    }
+
     /*
-final privateKey = SVPrivateKey.fromWIF('KwoVx4zhcVeXqjGCk4nYGxk2EGP7PGqQUdmRBpKGHfFWmMPzTqZu');
-  final pubkeyScript = 'OP_PUSHDATA1 32 0x2606168dabed7b4d11fdd242317adb480ee8c4fa7330db1a8b4f1c7749072aea OP_DROP OP_DUP OP_HASH160 20 0x581e5e328b0d34d724c09f123c050b341d11d96c OP_EQUALVERIFY OP_CHECKSIG';
-  final commitment = Commitment('YES');
-  var commitHash = HEX.encode(sha256(commitment.blindedCommitment));
-
-  test('Can create pubkey script', (){
-
-    var lockBuilder = PedersenCommitLockBuilder(commitment, privateKey.toAddress(networkType: NetworkType.TEST));
-
-
-    var scriptString = 'OP_PUSHDATA1 32 0x${commitHash} OP_DROP OP_DUP OP_HASH160 20 0x581e5e328b0d34d724c09f123c050b341d11d96c OP_EQUAL';
-    expect(scriptString, equals(lockBuilder.getScriptPubkey().toString()));
-  });
 
   test('can parse a locking script', (){
 

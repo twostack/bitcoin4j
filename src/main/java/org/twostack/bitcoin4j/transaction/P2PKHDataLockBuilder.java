@@ -23,10 +23,22 @@ import static org.twostack.bitcoin4j.script.ScriptOpCodes.OP_CHECKSIG;
  */
 public class P2PKHDataLockBuilder extends LockingScriptBuilder{
 
-    Address address;
-    byte[] pubkeyHash;
+    private Address address;
+    private byte[] pubkeyHash;
 
-    ByteBuffer dataBuffer;
+    public Address getAddress() {
+        return address;
+    }
+
+    public byte[] getPubkeyHash() {
+        return pubkeyHash;
+    }
+
+    public ByteBuffer getDataBuffer() {
+        return dataBuffer;
+    }
+
+    private ByteBuffer dataBuffer;
 
     static P2PKHDataLockBuilder fromPublicKey(PublicKey key, ByteBuffer data, NetworkAddressType networkType){
         Address address = Address.fromKey(networkType, key);
@@ -35,6 +47,7 @@ public class P2PKHDataLockBuilder extends LockingScriptBuilder{
 
     public P2PKHDataLockBuilder(Address address, ByteBuffer data){
         this.address = address;
+        this.dataBuffer = data;
 
         if (address != null) {
             this.pubkeyHash = address.getHash(); //hash160(pubkey) aka pubkeyHash
@@ -51,24 +64,31 @@ public class P2PKHDataLockBuilder extends LockingScriptBuilder{
 
             List<ScriptChunk> chunkList = script.getChunks();
 
-            if (chunkList.size() != 8){
+            if (chunkList.size() != 8 && chunkList.size() != 7 ){
                 throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR,"Wrong number of data elements for locking script");
             }
 
-            if (chunkList.get(5).size() != 20 ){
+            int chunkListOffset = 0;
+
+            if (chunkList.size() == 8){
+                chunkListOffset = 1;
+            }
+
+            if (chunkList.get(chunkListOffset + 4).opcode != 20 ){
                 throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Signature and Public Key values are malformed");
             }
 
-            if(!(   chunkList.get(3).opcode == ScriptOpCodes.OP_DUP &&
-                    chunkList.get(4).opcode == ScriptOpCodes.OP_HASH160 &&
-                    chunkList.get(7).opcode == ScriptOpCodes.OP_EQUALVERIFY &&
-                    chunkList.get(8).opcode == ScriptOpCodes.OP_CHECKSIG )){
+
+            if(!(   chunkList.get(chunkListOffset + 2).opcode == ScriptOpCodes.OP_DUP &&
+                    chunkList.get(chunkListOffset + 3).opcode == ScriptOpCodes.OP_HASH160 &&
+                    chunkList.get(chunkListOffset + 5).opcode == ScriptOpCodes.OP_EQUALVERIFY &&
+                    chunkList.get(chunkListOffset + 6).opcode == ScriptOpCodes.OP_CHECKSIG )){
                 throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Malformed script. Mismatched OP_CODES.");
             }
 
-            this.dataBuffer = ByteBuffer.wrap(chunkList.get(1).data);
+            this.dataBuffer = ByteBuffer.wrap(chunkList.get(chunkListOffset).data);
 
-            this.pubkeyHash = chunkList.get(5).data;
+            this.pubkeyHash = chunkList.get(chunkListOffset + 4).data;
 
         }else{
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Invalid Script or Malformed Script.");
