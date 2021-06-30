@@ -68,6 +68,12 @@ public class TransactionTest {
     }
 
     @Test
+    public void TestTransactionIdMatchesTransactionHash() {
+        Transaction transaction = Transaction.fromHex(tx1hex);
+        assertEquals(tx1id, transaction.getTransactionId());
+    }
+
+    @Test
     public void can_create_and_sign_transaction() throws InvalidKeyException, TransactionException, IOException, SigHashException {
 
         PrivateKey privateKey = PrivateKey.fromWIF("cVVvUsNHhbrgd7aW3gnuGo2qJM45LhHhTCVXrDSJDDcNGE6qmyCs");
