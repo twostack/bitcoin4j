@@ -47,7 +47,7 @@ public class TransactionSigner {
         byte[] hash = sigHash.createHash(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
 
         //FIXME: Revisit this issue surrounding the need to sign a reversed copy of the hash.
-        ///      Right now I've factored this out of signature.dart because 'coupling' & 'seperation of concerns'.
+        ///      Right now I've factored this out of signature.dart because 'coupling' & 'separation of concerns'.
         //       var reversedHash = Utils.HEX.encode(HEX.decode(hash).reversed.toList());
 
         // generate a signature for the input

@@ -31,7 +31,7 @@ public class TransactionBuilder {
     private List<TransactionInput> inputs = new ArrayList<>();
     private List<TransactionOutput> outputs = new ArrayList<>();
 
-    //Map the transactionIds we're spending from, to the corresponding UXTO amount in the output
+    //Map the transactionIds we're spending from, to the corresponding UTXO amount in the output
     private Map<String, BigInteger> spendingMap = new HashMap();
 
     private LockingScriptBuilder changeScriptBuilder;
@@ -42,7 +42,7 @@ public class TransactionBuilder {
 
     static final BigInteger DUST_AMOUNT = BigInteger.valueOf(256);
 
-    /// Margin of error to allow fees in the vecinity of the expected value but doesn't allow a big difference
+    /// Margin of error to allow fees in the vicinity of the expected value but doesn't allow a big difference
     private static final BigInteger FEE_SECURITY_MARGIN = BigInteger.valueOf(150);
 
     private long feePerKb = DEFAULT_FEE_PER_KB;
@@ -62,7 +62,7 @@ public class TransactionBuilder {
     private long nLockTime = 0;
 
     /*
-        utxoMap is expect to have :
+        utxoMap is expected to have :
 
         {
             "transactionId" : [String],

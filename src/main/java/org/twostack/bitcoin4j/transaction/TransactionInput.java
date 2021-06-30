@@ -31,7 +31,7 @@ public class TransactionInput {
         want to indicate that the transaction's [Transaction.nLockTime] should be ignored.
         This is a 64-bit value, in range 0 to (2^64) - 1
      */
-    static long MAX_SEQ_NUMBER =  0xFFFFFFFFL;
+    public static long MAX_SEQ_NUMBER =  0xFFFFFFFFL;
 
     private long _sequenceNumber;
 
