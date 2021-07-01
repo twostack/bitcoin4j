@@ -30,7 +30,6 @@ import java.util.*;
 
 public class Transaction {
 
-
     private long version = 1;
     private long nLockTime = 0;
     private ArrayList<TransactionInput> inputs = new ArrayList<>();
@@ -40,7 +39,7 @@ public class Transaction {
     public static final long NLOCKTIME_MAX_VALUE = 4294967295L;
 
     public static final long MAX_COINS = 21000000;
-    /// max amount of satoshis in circulation
+    /// max amount of bitcoins in circulation
 
     private static final int SMALLEST_UNIT_EXPONENT = 8;
     private static final long COIN_VALUE = LongMath.pow(10, SMALLEST_UNIT_EXPONENT);
@@ -247,11 +246,11 @@ public class Transaction {
     }
 
     public String getTransactionId(){
-        if (txHash == null){
+        byte[] idBytes = getTransactionIdBytes();
+        if (idBytes.length == 0) {
             return "";
         }
-
-        return Utils.HEX.encode(txHash.array());
+        return Utils.HEX.encode(idBytes);
     }
 
     public byte[] getTransactionIdBytes(){

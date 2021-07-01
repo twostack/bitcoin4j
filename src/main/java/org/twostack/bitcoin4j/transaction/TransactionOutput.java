@@ -43,7 +43,7 @@ public class TransactionOutput {
         return new TransactionOutput(satoshis, script);
     }
 
-    TransactionOutput(BigInteger satoshis, LockingScriptBuilder builder){
+    public TransactionOutput(BigInteger satoshis, LockingScriptBuilder builder){
         this.satoshis = satoshis;
         this._lockingScriptBuilder = builder;
     }

@@ -25,11 +25,11 @@ public class DefaultUnlockBuilder extends UnlockingScriptBuilder {
 
     List<TransactionSignature> signatures = new ArrayList<>();
 
-    DefaultUnlockBuilder(){
+    public DefaultUnlockBuilder(){
         super();
     }
 
-    DefaultUnlockBuilder(Script script){
+    public DefaultUnlockBuilder(Script script){
         super(script);
     }
 
