@@ -43,6 +43,9 @@ public class UnspendableDataLockBuilder extends LockingScriptBuilder{
 
                     dataList.add(ByteBuffer.wrap(chunks.get(i).data));
                 }
+            }else{
+                throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR,
+                        "Malformed OP_RETURN format. Use 'OP_FALSE OP_RETURN'");
             }
 
 

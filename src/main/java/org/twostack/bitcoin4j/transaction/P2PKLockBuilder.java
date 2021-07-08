@@ -11,6 +11,10 @@ public class P2PKLockBuilder extends LockingScriptBuilder {
 
     private PublicKey signerPubkey;
 
+    public P2PKLockBuilder(PublicKey publicKey){
+        this.signerPubkey = publicKey;
+    }
+
     public P2PKLockBuilder(Script script) {
         parse(script);
     }

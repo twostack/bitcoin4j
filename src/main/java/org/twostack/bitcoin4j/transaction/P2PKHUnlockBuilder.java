@@ -25,7 +25,8 @@ import java.util.List;
 
 public class P2PKHUnlockBuilder extends UnlockingScriptBuilder {
 
-    PublicKey signerPubkey;
+
+    private PublicKey signerPubkey;
 
     public P2PKHUnlockBuilder(Script script) throws SignatureDecodeException {
         parse(script);
@@ -78,5 +79,10 @@ public class P2PKHUnlockBuilder extends UnlockingScriptBuilder {
             ex.printStackTrace(); //FIXME: Handle more gracefully
             return new ScriptBuilder().build();
         }
+    }
+
+
+    public PublicKey getSignerPubkey() {
+        return signerPubkey;
     }
 }
