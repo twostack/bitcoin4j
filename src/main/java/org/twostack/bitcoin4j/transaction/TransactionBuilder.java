@@ -377,6 +377,9 @@ public class TransactionBuilder {
     }
 
     private TransactionOutput getChangeOutput(){
+
+        if (changeScriptBuilder == null) return null;
+
         if (changeOutput == null ){
             changeOutput = new TransactionOutput(BigInteger.ZERO, changeScriptBuilder.getLockingScript());
         }
