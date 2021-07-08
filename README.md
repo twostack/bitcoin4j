@@ -23,13 +23,18 @@ This library lacks, and will not implement :
 * Taproot 
 
 Current Supported features are :
-* Custom-Script Builder Interface to support novel locking/spending conditions within Script
 * Unbounded Transaction Types (creating non-standard transactions)
-* P2PKH Transaction Builder (Explicit helper to make TX assembly easier)
 * HD Key Derivation \(BIP32\)
 * Mnemonic Seed Support \(BIP39\)
 * Original Bitcoin Address format 
 * A built-in Bitcoin Script Interpreter
+* Custom-Script Builder Interface to support novel locking/spending conditions within Script
+    * P2PKH Transaction Builder - Pay to Pubkey Hash standard Transactions 
+    * P2MS Transaction Builder - Pay to Multisig. This is naked MultiSig (the proper way to do multisig).
+    * P2PK Transaction Builder - Pay to Public Key standard Transactions
+    * P2SH Transaction Builder - Pay to Script Hash. This should be considered deprecated. Nodes support his for backwards compatibility only.
+    * P2PKHDataLockBuilder - This is something new. Create a spendable data output. Spendable using P2PKH Transaction. 
+    * UnspendableDataLockBuilder - OP_RETURN-style Data builder. Prepends a Transaction Output Script with OP_FALSE OP_RETURN followed by a series of data pushes.
 
 ## Acknowledgement
 
