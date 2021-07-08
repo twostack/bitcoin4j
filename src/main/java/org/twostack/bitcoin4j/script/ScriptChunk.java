@@ -172,10 +172,10 @@ public class ScriptChunk {
                         // OP_1NEGATE -> 1
                         str.append("-1");
                     } else {
-                        str.append( ScriptOpCodes.getOpCodeName(opcode));
+                        str.append( "OP_" + ScriptOpCodes.getOpCodeName(opcode));
                     }
                 } else {
-                    str.append( ScriptOpCodes.getOpCodeName(opcode));
+                    str.append(  "OP_" + ScriptOpCodes.getOpCodeName(opcode));
                 }
             } else {
                 String numstr =  Integer.toHexString(opcode);
@@ -195,7 +195,7 @@ public class ScriptChunk {
             if (!asm && (opcode == ScriptOpCodes.OP_PUSHDATA1 ||
                     opcode == ScriptOpCodes.OP_PUSHDATA2 ||
                     opcode == ScriptOpCodes.OP_PUSHDATA4)) {
-                str.append(ScriptOpCodes.getOpCodeName(opcode) + " ");
+                str.append( "OP_" +  ScriptOpCodes.getOpCodeName(opcode) + " ");
             }
             if (data.length > 0) {
                 if (asm) {

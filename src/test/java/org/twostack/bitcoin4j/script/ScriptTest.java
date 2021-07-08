@@ -21,6 +21,7 @@ package org.twostack.bitcoin4j.script;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
+import org.assertj.core.api.Assertions;
 import org.twostack.bitcoin4j.exception.VerificationException;
 import org.twostack.bitcoin4j.script.Script.VerifyFlag;
 import org.junit.Before;
@@ -29,7 +30,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.twostack.bitcoin4j.transaction.Transaction;
 
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
 import java.util.*;
 
 import static org.twostack.bitcoin4j.Utils.HEX;
@@ -88,26 +91,26 @@ public class ScriptTest {
     }
 
     @Test
-    public void should_parse_these_known_scripts(){
+    public void should_parse_these_known_scripts() throws IOException {
 
-        String parsed = Script.fromAsmString("0 PUSHDATA4 3 0x010203 0").toAsmString();
-        assertEquals("0 PUSHDATA4 3 0x010203 0", parsed);
+        String parsed = Script.fromAsmString("OP_0 OP_PUSHDATA4 3 0x010203 OP_0").toAsmString();
+        assertEquals("OP_0 OP_PUSHDATA4 3 0x010203 OP_0", parsed);
 
-        String parsed2 = Script.fromAsmString("0 PUSHDATA2 3 0x010203 0").toAsmString();
-        assertEquals("0 PUSHDATA2 3 0x010203 0", parsed2);
+        String parsed2 = Script.fromAsmString("OP_0 OP_PUSHDATA2 3 0x010203 OP_0").toAsmString();
+        assertEquals("OP_0 OP_PUSHDATA2 3 0x010203 OP_0", parsed2);
 
-        String parsed3 = Script.fromAsmString("0 PUSHDATA1 3 0x010203 0").toAsmString();
-        assertEquals("0 PUSHDATA1 3 0x010203 0", parsed3);
+        String parsed3 = Script.fromAsmString("OP_0 OP_PUSHDATA1 3 0x010203 OP_0").toAsmString();
+        assertEquals("OP_0 OP_PUSHDATA1 3 0x010203 OP_0", parsed3);
 
-        String parsed4 = Script.fromAsmString("0 3 0x010203 0").toAsmString();
-        assertEquals("0 3 0x010203 0", parsed4);
+        String parsed4 = Script.fromAsmString("OP_0 3 0x010203 OP_0").toAsmString();
+        assertEquals("OP_0 3 0x010203 OP_0", parsed4);
     }
 
 
     @Test
-    public void can_roundtrip_serializing_of_a_script(){
+    public void can_roundtrip_serializing_of_a_script() throws IOException {
 
-        final String str = "0 RETURN 34 0x31346b7871597633656d48477766386d36596753594c516b4743766e395172677239 66 0x303236336661663734633031356630376532633834343538623566333035653262323762366566303838393238383133326435343264633139633436663064663532 PUSHDATA1 150 0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
+        final String str = "OP_0 OP_RETURN 34 0x31346b7871597633656d48477766386d36596753594c516b4743766e395172677239 66 0x303236336661663734633031356630376532633834343538623566333035653262323762366566303838393238383133326435343264633139633436663064663532 OP_PUSHDATA1 150 0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
         final Script script = Script.fromAsmString(str);
 
         assertEquals(str, script.toAsmString());
@@ -132,8 +135,8 @@ public class ScriptTest {
     }
 
     @Test
-    public void should_parse_this_asm_script(){
-        String asm = "DUP HASH160 20 0xf4c03610e60ad15100929cc23da2f3a799af1725 EQUALVERIFY CHECKSIG";
+    public void should_parse_this_asm_script() throws IOException {
+        String asm = "OP_DUP OP_HASH160 20 0xf4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG";
         Script script = Script.fromAsmString(asm);
 
         assertEquals(script.chunks.get(0).opcode, ScriptOpCodes.OP_DUP);
@@ -146,8 +149,8 @@ public class ScriptTest {
 
 
     @Test
-    public void should_parse_this_second_asm_script(){
-        String asm = "RETURN 3 0x026d02 6 0x0568656c6c6f";
+    public void should_parse_this_second_asm_script() throws IOException {
+        String asm = "OP_RETURN 3 0x026d02 6 0x0568656c6c6f";
         Script script = Script.fromAsmString(asm);
 
         assertEquals(script.toAsmString(), asm);
@@ -155,7 +158,7 @@ public class ScriptTest {
 
     @Test
     public void should_fail_on_invalid_hex(){
-        String asm = "RETURN 3 0x026d02 7 0x0568656c6c6fzz";
+        String asm = "OP_RETURN 3 0x026d02 7 0x0568656c6c6fzz";
 
         assertThrows(ScriptException.class, () -> Script.fromAsmString(asm));
     }
@@ -176,6 +179,8 @@ public class ScriptTest {
     }
 
 
+
+
     @Test
     public void dataDrivenValidScripts() throws Exception {
         JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
@@ -185,6 +190,7 @@ public class ScriptTest {
             Script scriptPubKey = parseScriptString(test.get(1).asText());
             Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
             try {
+
 
                 Interpreter interp = new Interpreter();
                 interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
@@ -217,6 +223,66 @@ public class ScriptTest {
                 // Expected.
             }
         }
+    }
+
+    @Test
+    public void parseKnownAsm() throws IOException {
+        String asm = "OP_DUP OP_HASH160 20 0xf4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG";
+        Script script = Script.fromAsmString(asm);
+        assertEquals(ScriptOpCodes.OP_DUP, script.getChunks().get(0).opcode);
+        assertEquals(ScriptOpCodes.OP_HASH160, script.getChunks().get(1).opcode);
+        assertEquals(20, script.getChunks().get(2).opcode);
+        assertEquals( "f4c03610e60ad15100929cc23da2f3a799af1725", HEX.encode(script.getChunks().get(2).data));
+        assertEquals( ScriptOpCodes.OP_EQUALVERIFY, script.getChunks().get(3).opcode);
+        assertEquals( ScriptOpCodes.OP_CHECKSIG, script.getChunks().get(4).opcode);
+    }
+
+    @Test
+    public void parseKnownProblematic() {
+        String asm = "OP_RETURN 3 0x026d02 6 0x0568656c6c6f";
+        Script script = Script.fromAsmString(asm);
+        assertEquals(asm, script.toAsmString());
+    }
+
+    @Test
+    public void failsOnInvalidHex(){
+        String asm = "OP_RETURN 026d02 0568656c6c6fzz";
+        assertThrows(ScriptException.class, () -> Script.fromAsmString(asm));
+    }
+
+    @Test
+    public void shouldParseLongPushData(){
+
+        byte[] buf = new byte[220];
+        String asm = "OP_0 OP_RETURN OP_PUSHDATA1 220 0x" + HEX.encode(buf);
+        Script script = Script.fromAsmString(asm);
+        assertEquals(ScriptOpCodes.OP_PUSHDATA1, script.getChunks().get(2).opcode);
+        assertEquals(asm, script.toAsmString());
+    }
+
+    @Test
+    public void shouldParseLongPushData2(){
+        byte[] buf = new byte[1024];
+        String asm = "OP_0 OP_RETURN OP_PUSHDATA2 1024 0x" + HEX.encode(buf);
+        Script script = Script.fromAsmString(asm);
+        assertEquals(ScriptOpCodes.OP_PUSHDATA2, script.getChunks().get(2).opcode);
+        assertEquals(asm, script.toAsmString());
+    }
+
+    @Test
+    public void shouldParseLongPushData4(){
+        int doubleSize = Double.valueOf(Math.pow(2, 17)).intValue();
+        byte[] buf = new byte[doubleSize];
+        String asm = "OP_0 OP_RETURN OP_PUSHDATA4 " + doubleSize + " 0x" + HEX.encode(buf);
+        Script script = Script.fromAsmString(asm);
+        assertEquals(ScriptOpCodes.OP_PUSHDATA4, script.getChunks().get(2).opcode);
+        assertEquals(asm, script.toAsmString());
+    }
+
+    @Test
+    public void shouldRenderP2PKH() {
+        Script script = new Script(HEX.decode("76a914f4c03610e60ad15100929cc23da2f3a799af172588ac"));
+        assertEquals("OP_DUP OP_HASH160 20 0xf4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG",  script.toAsmString());
     }
 
 

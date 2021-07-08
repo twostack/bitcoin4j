@@ -23,7 +23,7 @@ public abstract class LockingScriptBuilder {
 
     protected Script script;
 
-    public abstract Script getScriptPubkey();
+    public abstract Script getLockingScript();
 
     public LockingScriptBuilder(){
         this.script = new ScriptBuilder().build();

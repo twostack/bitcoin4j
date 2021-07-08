@@ -35,7 +35,6 @@ public class TransactionSigner {
             int sigHashType) throws TransactionException, IOException, SigHashException, SignatureDecodeException {
 
         //FIXME: This is a test work-around for why I can't sign an unsigned raw txn
-        //FIXME: This assumes we're signing P2PKH
 
 
         //FIXME: This should account for ANYONECANPAY mask that limits outputs to sign over
@@ -45,15 +44,6 @@ public class TransactionSigner {
 
         //NOTE: Return hash in LittleEndian (already double-sha256 applied)
         byte[] hash = sigHash.createHash(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
-
-        //FIXME: Revisit this issue surrounding the need to sign a reversed copy of the hash.
-        ///      Right now I've factored this out of signature.dart because 'coupling' & 'separation of concerns'.
-        //       var reversedHash = Utils.HEX.encode(HEX.decode(hash).reversed.toList());
-
-        // generate a signature for the input
-        // TransactionSignature is just a thin wrapper over our signature to assert
-        // type safety during serializing of our TransactionOutput
-
 
         //FIXME: This kind of required round-tripping into the base class of TransactionSignature smells funny
         //       We should have a cleaner constructor for TransactionSignature

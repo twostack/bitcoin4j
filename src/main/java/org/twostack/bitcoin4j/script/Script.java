@@ -31,11 +31,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
 import java.util.stream.Collectors;
 
+import static org.twostack.bitcoin4j.Utils.HEX;
 import static org.twostack.bitcoin4j.script.ScriptOpCodes.*;
 import static com.google.common.base.Preconditions.*;
 
@@ -140,6 +142,7 @@ public class Script {
         return new Script(chunks);
     }
 
+
     public Script(byte[] programBytes, long creationTimeSeconds) throws ScriptException {
         program = programBytes;
         parse(programBytes);
@@ -185,21 +188,25 @@ public class Script {
         List<String> tokenList = Arrays.asList(script.split(" ")); //split on spaces
         tokenList.removeIf(token -> token.trim().isEmpty());
 
-            //encode tokens, leaving non-token elements intact
+        //encode tokens, leaving non-token elements intact
         for (int index = 0; index < tokenList.size();) {
             String token = tokenList.get(index);
 
-            String opcode = token;
+            int opcodenum = OP_INVALIDOPCODE;
+            if (token.startsWith("OP_")) {
+                opcodenum = ScriptOpCodes.getOpCode(token.replaceFirst("OP_", ""));
+            }else{
+                opcodenum = Integer.valueOf(opcodenum);
+            }
 
-            Integer opcodenum = ScriptOpCodes.getOpCode(opcode);
-
-            if ((opcodenum >= OP_2 && opcodenum <= OP_16) || opcodenum == OP_INVALIDOPCODE) {
+            if (opcodenum == OP_INVALIDOPCODE ) {
                 try {
                     opcodenum = Integer.valueOf(token);
-                    ScriptChunk newChunk = new ScriptChunk(opcodenum, Utils.HEX.decode(tokenList.get(index + 1).substring(2)));
-                    _chunks.add(newChunk);
+                    if (opcodenum > 0 && opcodenum < OP_PUSHDATA1) {
+                        ScriptChunk newChunk = new ScriptChunk(opcodenum, Utils.HEX.decode(tokenList.get(index + 1).substring(2)));
+                        _chunks.add(newChunk);
+                    }
                     index = index + 2; //step by two
-
                 }catch (NumberFormatException ex){
                     throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, ex.getMessage());
                 }catch (Exception ex){

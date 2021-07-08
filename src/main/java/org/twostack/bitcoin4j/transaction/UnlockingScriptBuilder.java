@@ -37,7 +37,7 @@ public abstract class UnlockingScriptBuilder {
         this.script = new ScriptBuilder().build();
     }
 
-    public abstract Script getScriptSig();
+    public abstract Script getUnlockingScript();
 
     public List<TransactionSignature> getSignatures() {
         return Collections.unmodifiableList(signatures);

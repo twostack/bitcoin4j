@@ -249,7 +249,7 @@ public class SigHash {
         writer.writeBytes(Utils.reverseBytes(input.getPrevTxnId()), input.getPrevTxnId().length);
         writer.writeUint32LE(input.getPrevTxnOutputIndex());
 
-        // scriptCode of the input (serialized as scripts inside CTxOuts)
+        // scriptCode (subScript) from the UTXO (serialized as scripts inside CTxOuts)
         VarInt subscriptVarInt = new VarInt(subscriptCopy.getProgram().length);
         writer.writeBytes(subscriptVarInt.encode(), subscriptVarInt.encode().length);
         byte[] subscriptBytes = subscriptCopy.getProgram();

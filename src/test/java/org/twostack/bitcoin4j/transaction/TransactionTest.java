@@ -74,6 +74,38 @@ public class TransactionTest {
     }
 
     @Test
+    public void canCreateAndSignTransactionWithoutChange() throws InvalidKeyException, TransactionException, IOException, SigHashException {
+
+        PrivateKey privateKey = PrivateKey.fromWIF("cVVvUsNHhbrgd7aW3gnuGo2qJM45LhHhTCVXrDSJDDcNGE6qmyCs");
+        Address changeAddress = Address.fromString(NetworkType.TEST, "mu4DpTaD75nheE4z5CQazqm1ivej1vzL4L"); // my address
+        Address recipientAddress = Address.fromString(NetworkType.TEST, "n3aZKucfWmXeXhX13MREQQnqNfbrWiYKtg"); //bitcoin-cli address
+
+        //Create a Transaction instance from the RAW transaction data create by bitcoin-cli.
+        //this transaction contains the UTXO we are interested in
+        Transaction txWithUTXO = Transaction.fromHex(coinbaseOutput);
+
+        //Let's create the set of Spending Transaction Inputs. These Transaction Inputs need to refer to the Outputs in
+        //the Transaction we are spending from.
+
+        P2PKHLockBuilder locker = new P2PKHLockBuilder(recipientAddress);
+        P2PKHUnlockBuilder unlocker = new P2PKHUnlockBuilder(privateKey.getPublicKey());
+        Transaction unsignedTxn = new TransactionBuilder()
+                .spendFromTransaction(txWithUTXO, 0, Transaction.NLOCKTIME_MAX_VALUE, unlocker) //set global sequenceNumber/nLocktime time for each Input created
+                .spendTo(locker, BigInteger.valueOf(99999000L))
+                .withFeePerKb(512)
+                .build(true);
+
+        TransactionOutput utxoToSign = txWithUTXO.getOutputs().get(0);
+
+        //simply check that we have clean e2e execution
+        Assertions.assertThatCode(() -> {
+            new TransactionSigner().sign(unsignedTxn, utxoToSign,0, privateKey, SigHashType.ALL.value | SigHashType.FORKID.value);
+        }).doesNotThrowAnyException();
+
+        //System.out.println(HEX.encode(signedTx.serialize()));
+    }
+
+    @Test
     public void can_create_and_sign_transaction() throws InvalidKeyException, TransactionException, IOException, SigHashException {
 
         PrivateKey privateKey = PrivateKey.fromWIF("cVVvUsNHhbrgd7aW3gnuGo2qJM45LhHhTCVXrDSJDDcNGE6qmyCs");

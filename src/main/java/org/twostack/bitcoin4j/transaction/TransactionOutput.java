@@ -69,7 +69,7 @@ public class TransactionOutput {
         writer.writeUint64LE(satoshis);
 
         //write the locking script
-        byte[] outputScript = _lockingScriptBuilder.getScriptPubkey().getProgram();
+        byte[] outputScript = _lockingScriptBuilder.getLockingScript().getProgram();
         VarInt varInt = new VarInt(outputScript.length);
         byte[] varIntBytes = varInt.encode();
         writer.writeBytes(varIntBytes, varIntBytes.length);
@@ -79,7 +79,7 @@ public class TransactionOutput {
     }
 
     public Script getScript() {
-        return _lockingScriptBuilder.getScriptPubkey();
+        return _lockingScriptBuilder.getLockingScript();
     }
 
     public BigInteger getAmount() {

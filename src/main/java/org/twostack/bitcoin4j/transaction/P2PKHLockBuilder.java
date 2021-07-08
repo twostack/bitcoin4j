@@ -27,8 +27,9 @@ import static org.twostack.bitcoin4j.script.ScriptOpCodes.*;
 
 public class P2PKHLockBuilder extends LockingScriptBuilder{
 
-    Address address;
-    byte[] pubkeyHash;
+
+    private Address address;
+    private byte[] pubkeyHash;
 
     static P2PKHLockBuilder fromPublicKey(PublicKey key, NetworkAddressType networkType){
         Address address = Address.fromKey(networkType, key);
@@ -76,7 +77,7 @@ public class P2PKHLockBuilder extends LockingScriptBuilder{
     }
 
     @Override
-    public Script getScriptPubkey() {
+    public Script getLockingScript() {
 
         if (this.pubkeyHash == null) {
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Missing pubkeyHash. Can't construct the script.");
@@ -91,5 +92,13 @@ public class P2PKHLockBuilder extends LockingScriptBuilder{
 
         return builder.build();
 
+    }
+
+    public Address getAddress() {
+        return address;
+    }
+
+    public byte[] getPubkeyHash() {
+        return pubkeyHash;
     }
 }
