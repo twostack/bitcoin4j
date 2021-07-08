@@ -21,6 +21,7 @@ package org.twostack.bitcoin4j.script;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
+import org.assertj.core.api.Assertions;
 import org.twostack.bitcoin4j.exception.VerificationException;
 import org.twostack.bitcoin4j.script.Script.VerifyFlag;
 import org.junit.Before;
@@ -31,6 +32,7 @@ import org.twostack.bitcoin4j.transaction.Transaction;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.ByteBuffer;
 import java.util.*;
 
 import static org.twostack.bitcoin4j.Utils.HEX;
@@ -228,114 +230,60 @@ public class ScriptTest {
         String asm = "OP_DUP OP_HASH160 20 0xf4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG";
         Script script = Script.fromAsmString(asm);
         assertEquals(ScriptOpCodes.OP_DUP, script.getChunks().get(0).opcode);
-//        expect(script.chunks[1].opcodenum, equals(OpCodes.OP_HASH160));
-//        expect(script.chunks[2].opcodenum, equals(20));
-//        expect(HEX.encode(script.chunks[2].buf), equals('f4c03610e60ad15100929cc23da2f3a799af1725'));
-//        expect(script.chunks[3].opcodenum, equals(OpCodes.OP_EQUALVERIFY));
-//        expect(script.chunks[4].opcodenum, equals(OpCodes.OP_CHECKSIG));
+        assertEquals(ScriptOpCodes.OP_HASH160, script.getChunks().get(1).opcode);
+        assertEquals(20, script.getChunks().get(2).opcode);
+        assertEquals( "f4c03610e60ad15100929cc23da2f3a799af1725", HEX.encode(script.getChunks().get(2).data));
+        assertEquals( ScriptOpCodes.OP_EQUALVERIFY, script.getChunks().get(3).opcode);
+        assertEquals( ScriptOpCodes.OP_CHECKSIG, script.getChunks().get(4).opcode);
     }
 
-    /*
-          test('should parse this known script in ASM', () {
-        var asm = 'OP_DUP OP_HASH160 f4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG';
-        var script = SVScript.fromASM(asm);
-        expect(script.chunks[0].opcodenum, equals(OpCodes.OP_DUP));
-        expect(script.chunks[1].opcodenum, equals(OpCodes.OP_HASH160));
-        expect(script.chunks[2].opcodenum, equals(20));
-        expect(HEX.encode(script.chunks[2].buf), equals('f4c03610e60ad15100929cc23da2f3a799af1725'));
-        expect(script.chunks[3].opcodenum, equals(OpCodes.OP_EQUALVERIFY));
-        expect(script.chunks[4].opcodenum, equals(OpCodes.OP_CHECKSIG));
-      });
+    @Test
+    public void parseKnownProblematic() {
+        String asm = "OP_RETURN 3 0x026d02 6 0x0568656c6c6f";
+        Script script = Script.fromAsmString(asm);
+        assertEquals(asm, script.toAsmString());
+    }
 
-      test('should parse this known problematic script in ASM', () {
-        var asm = 'OP_RETURN 026d02 0568656c6c6f';
-        var script = SVScript.fromASM(asm);
-        expect(script.toString(type:'asm'), equals(asm));
-      });
+    @Test
+    public void failsOnInvalidHex(){
+        String asm = "OP_RETURN 026d02 0568656c6c6fzz";
+        assertThrows(ScriptException.class, () -> Script.fromAsmString(asm));
+    }
 
-      test('should know this is invalid hex', () {
-        var asm = 'OP_RETURN 026d02 0568656c6c6fzz';
-        expect(() => SVScript.fromASM(asm), throwsException);
-      });
+    @Test
+    public void shouldParseLongPushData(){
 
-      test('should parse this long PUSHDATA1 script in ASM', () {
-        var buf = Uint8List(220);
-        var asm = 'OP_RETURN ' + HEX.encode(buf);
-        var script = SVScript.fromASM(asm);
-        expect(script.chunks[1].opcodenum, equals(OpCodes.OP_PUSHDATA1));
-        expect(script.toString(type:'asm'), equals(asm));
-      });
+        byte[] buf = new byte[220];
+        String asm = "OP_0 OP_RETURN OP_PUSHDATA1 220 0x" + HEX.encode(buf);
+        Script script = Script.fromAsmString(asm);
+        assertEquals(ScriptOpCodes.OP_PUSHDATA1, script.getChunks().get(2).opcode);
+        assertEquals(asm, script.toAsmString());
+    }
 
-      test('should parse this long PUSHDATA2 script in ASM', () {
-        var buf = Uint8List(1024);
-        var asm = 'OP_RETURN ' + HEX.encode(buf);
-        var script = SVScript.fromASM(asm);
-        expect(script.chunks[1].opcodenum, equals(OpCodes.OP_PUSHDATA2));
-        expect(script.toString(type:'asm'), equals(asm));
-      });
+    @Test
+    public void shouldParseLongPushData2(){
+        byte[] buf = new byte[1024];
+        String asm = "OP_0 OP_RETURN OP_PUSHDATA2 1024 0x" + HEX.encode(buf);
+        Script script = Script.fromAsmString(asm);
+        assertEquals(ScriptOpCodes.OP_PUSHDATA2, script.getChunks().get(2).opcode);
+        assertEquals(asm, script.toAsmString());
+    }
 
-      test('should parse this long PUSHDATA4 script in ASM', () {
-        var buf = Uint8List(pow(2, 17));
-        var asm = 'OP_RETURN ' + HEX.encode(buf);
-        var script = SVScript.fromASM(asm);
-        expect(script.chunks[1].opcodenum, equals(OpCodes.OP_PUSHDATA4));
-        expect(script.toString(type:'asm'), equals(asm));
-      });
+    @Test
+    public void shouldParseLongPushData4(){
+        int doubleSize = Double.valueOf(Math.pow(2, 17)).intValue();
+        byte[] buf = new byte[doubleSize];
+        String asm = "OP_0 OP_RETURN OP_PUSHDATA4 " + doubleSize + " 0x" + HEX.encode(buf);
+        Script script = Script.fromAsmString(asm);
+        assertEquals(ScriptOpCodes.OP_PUSHDATA4, script.getChunks().get(2).opcode);
+        assertEquals(asm, script.toAsmString());
+    }
 
-      test('should return this script correctly - OP_FALSE', () {
-        var asm1 = 'OP_FALSE';
-        var asm2 = 'OP_0';
-        var asm3 = '0';
-        expect(SVScript.fromASM(asm1).toString(type:'asm'),equals(asm3));
-        expect(SVScript.fromASM(asm2).toString(type:'asm'),equals(asm3));
-        expect(SVScript.fromASM(asm3).toString(type:'asm'),equals(asm3));
-      });
-
-
-      test('should return this script correctly - OP_1NEGATE', () {
-        var asm1 = 'OP_1NEGATE';
-        var asm2 = '-1';
-        expect(SVScript.fromASM(asm1).toString(type:'asm'), equals(asm2));
-        expect(SVScript.fromASM(asm2).toString(type:'asm'), equals(asm2));
-      });
-
-
-      test('should output this buffer an OP code, data, and another OP code', () {
-        var writer = ByteDataWriter();
-        writer.writeUint8(OpCodes.OP_0);
-        writer.writeUint8(OpCodes.OP_PUSHDATA4);
-        writer.writeUint16(3, Endian.little);
-        writer.write([0, 0, 1, 2, 3]);
-        writer.writeUint8(OpCodes.OP_0);
-
-        var buf = writer.toBytes();
-        var script = SVScript.fromBuffer(buf);
-        expect(script.chunks.length, equals(3));
-        expect(script.chunks[0].opcodenum, equals(buf[0]));
-        expect(HEX.encode(script.chunks[1].buf), equals('010203'));
-        expect(script.chunks[2].opcodenum, equals(buf[buf.length - 1]));
-        expect(script.toString(),  equals('OP_0 OP_PUSHDATA4 3 0x010203 OP_0'));
-      });
-
-      test('should output this known script as ASM', () {
-        var script = SVScript.fromHex('76a914f4c03610e60ad15100929cc23da2f3a799af172588ac');
-        expect(script.toString(type: 'asm'), equals('OP_DUP OP_HASH160 f4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG'));
-      });
-
-
-      test('should output this known script with pushdata1 opcode as ASM', () {
-        // network: livenet
-        // txid: dd6fabd2d879be7b8394ad170ff908e9a36b5d5d0b394508df0cca36d2931589
-        var script = SVScript.fromHex('00483045022100beb1d83771c04faaeb40bded4f031ed0e0730aaab77cf70102ecd05734a1762002206f168fb00f3b9d7c04b8c78e1fc11e81b9caa49885a904bf22780a7e14a8373101483045022100a319839e37828bf164ff45de34a3fe22d542ebc8297c5d87dbc56fc3068ff9d5022077081a877b6e7f104d8a2fe0985bf2eb7de2e08edbac9499fc3710a353f65461014c69522103a70ae7bde64333461fb88aaafe12ad6c67ca17c8213642469ae191e0aabc7251210344a62338c8ddf138771516d38187146242db50853aa588bcb10a5e49c86421a52102b52a1aed304c4d6cedcf82911f90ca6e1ffed0a5b8f7f19c68213d6fcbde677e53ae');
-        expect(script.toString(type:'asm'), equals('0 3045022100beb1d83771c04faaeb40bded4f031ed0e0730aaab77cf70102ecd05734a1762002206f168fb00f3b9d7c04b8c78e1fc11e81b9caa49885a904bf22780a7e14a8373101 3045022100a319839e37828bf164ff45de34a3fe22d542ebc8297c5d87dbc56fc3068ff9d5022077081a877b6e7f104d8a2fe0985bf2eb7de2e08edbac9499fc3710a353f6546101 522103a70ae7bde64333461fb88aaafe12ad6c67ca17c8213642469ae191e0aabc7251210344a62338c8ddf138771516d38187146242db50853aa588bcb10a5e49c86421a52102b52a1aed304c4d6cedcf82911f90ca6e1ffed0a5b8f7f19c68213d6fcbde677e53ae'));
-      });
-
-      test('should OP_1NEGATE opcode as -1 with ASM', () {
-        var script = SVScript.fromString('OP_1NEGATE');
-        expect(script.toString(type: 'asm'), equals('-1'));
-      });
-
-     */
+    @Test
+    public void shouldRenderP2PKH() {
+        Script script = new Script(HEX.decode("76a914f4c03610e60ad15100929cc23da2f3a799af172588ac"));
+        assertEquals("OP_DUP OP_HASH160 20 0xf4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG",  script.toAsmString());
+    }
 
 
 }
