@@ -11,6 +11,7 @@ i.e. massive on-chain scaling, protocol stability and original-bitcoin-protocol 
 ### Learn More about BitcoinSV
 You can learn more about BitcoinSV by visiting : 
 * [TwoStack Bitcoin Developer Guide](https://www.twostack.org/docs/getting-started/)
+* [TwoStack Youtube Channel](https://youtube.com/twostack)
 * [Bitcoin Association Website](https://bitcoinsv.io) 
 * [BitcoinSV Wiki](https://wiki.bitcoinsv.io/).
 
@@ -32,7 +33,22 @@ implementation("org.twostack:bitcoin4j:1.4.1")
 </dependency>
 ```
 
-## Feature Support
+## Clean Transaction Builder
+Several helper classes and APIs exist to make constructing Transactions more intuitive.
+
+[See the full example source code](https://github.com/twostack/data-transaction/blob/main/src/main/kotlin/main.kt)
+
+As a native Java implementation, the library integrates well with other JVM languages, e.g. Kotlin. 
+```kotlin
+    val txBuilder: TransactionBuilder = TransactionBuilder()
+    val spendingTx: Transaction = txBuilder.spendFromTransaction(aliceFundingTx, 1, Transaction.NLOCKTIME_MAX_VALUE, unlockBuilder)
+        .spendTo(bobLockingBuilder, BigInteger.valueOf(10000))
+        .sendChangeTo(aliceAddress, aliceLockingBuilder)
+        .withFeePerKb(512)
+        .build(true)
+```
+
+## Features
 
 This library lacks, and will not implement :
 * Segregated Witness \(Segwit\) Transaction support
@@ -60,9 +76,4 @@ This library is a fork of the BitcoinJ and BitcoinJ-Cash projects. Contributor a
 
 ## Contact
 
-You can reach the author at :
-
-* @beardpappa on Twitter
-* beardpappa@moneybutton.com \(PayMail to buy me a beer\)
-* stephan@twostack.org
-
+You can reach the author at : stephan@twostack.org
