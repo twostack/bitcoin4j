@@ -64,13 +64,14 @@ As a native Java implementation, the library integrates well with other JVM lang
     * UnspendableDataLockBuilder - OP_RETURN-style Data builder. Prepends a Transaction Output Script with OP_FALSE OP_RETURN followed by a series of data pushes.
 
 ### Deprecated Features
+The following features represent forks away from the original Bitcoin Protocol.
 
-This library lacks, and will not implement :
+This library lacks, and does not implement :
 
-* Segregated Witness \(Segwit\) Transaction support
-* Schnorr Transaction Signature support 
-* Check Datasig \(OP\_CHECKDATASIG\) 
-* Taproot 
+* Segregated Witness \(Segwit\) Transaction support (Bitcoin Core - BTC)
+* Schnorr Transaction Signature support (Bitcoin Cash - BCH)
+* Check Datasig \(OP\_CHECKDATASIG\) (Bitcoin Cash - BCH)
+* Taproot (Bitcoin Core - BTC)
 
 ## Acknowledgement
 
