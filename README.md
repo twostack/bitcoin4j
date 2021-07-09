@@ -59,7 +59,7 @@ As a native Java implementation, the library integrates well with other JVM lang
     * P2PKH Transaction Builder - Pay to Pubkey Hash standard Transactions 
     * P2MS Transaction Builder - Pay to Multisig. This is naked MultiSig (the proper way to do multisig).
     * P2PK Transaction Builder - Pay to Public Key standard Transactions
-    * P2SH Transaction Builder - Pay to Script Hash. This should be considered deprecated. Nodes support his for backwards compatibility only.
+    * P2SH Transaction Builder - Pay to Script Hash. This should be considered deprecated. BitcoinSV Nodes support this for backwards compatibility only.
     * P2PKHDataLockBuilder - This is something new. Create a spendable data output. Spendable using P2PKH Transaction. 
     * UnspendableDataLockBuilder - OP_RETURN-style Data builder. Prepends a Transaction Output Script with OP_FALSE OP_RETURN followed by a series of data pushes.
 
