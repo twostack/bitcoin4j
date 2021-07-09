@@ -14,6 +14,24 @@ You can learn more about BitcoinSV by visiting :
 * [Bitcoin Association Website](https://bitcoinsv.io) 
 * [BitcoinSV Wiki](https://wiki.bitcoinsv.io/).
 
+## Installation
+Binaries for the library are [available on Maven Central](https://search.maven.org/artifact/org.twostack/bitcoin4j/1.4.1/jar). 
+
+
+### Gradle Dependencies
+```gradle
+implementation("org.twostack:bitcoin4j:1.4.1")
+```
+
+### Maven Dependencies
+```xml
+<dependency>
+  <groupId>org.twostack</groupId>
+  <artifactId>bitcoin4j</artifactId>
+  <version>1.4.1</version>
+</dependency>
+```
+
 ## Feature Support
 
 This library lacks, and will not implement :
