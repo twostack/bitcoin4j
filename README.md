@@ -50,13 +50,6 @@ As a native Java implementation, the library integrates well with other JVM lang
 
 ## Features
 
-This library lacks, and will not implement :
-* Segregated Witness \(Segwit\) Transaction support
-* Schnorr Transaction Signature support 
-* Check Datasig \(OP\_CHECKDATASIG\) 
-* Taproot 
-
-Current Supported features are :
 * Unbounded Transaction Types (creating non-standard transactions)
 * HD Key Derivation \(BIP32\)
 * Mnemonic Seed Support \(BIP39\)
@@ -69,6 +62,15 @@ Current Supported features are :
     * P2SH Transaction Builder - Pay to Script Hash. This should be considered deprecated. Nodes support his for backwards compatibility only.
     * P2PKHDataLockBuilder - This is something new. Create a spendable data output. Spendable using P2PKH Transaction. 
     * UnspendableDataLockBuilder - OP_RETURN-style Data builder. Prepends a Transaction Output Script with OP_FALSE OP_RETURN followed by a series of data pushes.
+
+### Deprecated Features
+
+This library lacks, and will not implement :
+
+* Segregated Witness \(Segwit\) Transaction support
+* Schnorr Transaction Signature support 
+* Check Datasig \(OP\_CHECKDATASIG\) 
+* Taproot 
 
 ## Acknowledgement
 
