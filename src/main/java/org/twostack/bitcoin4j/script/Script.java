@@ -31,7 +31,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
@@ -85,7 +84,9 @@ public class Script {
         CLEANSTACK, // Require that only a single stack element remains after evaluation.
         CHECKLOCKTIMEVERIFY, // Enable CHECKLOCKTIMEVERIFY operation
         ENABLESIGHASHFORKID,
-        MONOLITH_OPCODES // May 15, 2018 Hard fork
+        MONOLITH_OPCODES, // May 15, 2018 Hard fork
+        UTXO_AFTER_GENESIS,
+        MINIMALIF
     }
     public static final EnumSet<VerifyFlag> ALL_VERIFY_FLAGS = EnumSet.allOf(VerifyFlag.class);
 
@@ -136,10 +137,58 @@ public class Script {
         return new Script(programBytes, LocalDateTime.now().toEpochSecond(ZoneOffset.UTC));
     }
 
-    public static Script fromAsmString(String program) throws ScriptException{
+    public static Script fromBitcoindString(String program) throws ScriptException{
         List<ScriptChunk> chunks = stringToChunks(program);
 
         return new Script(chunks);
+    }
+
+    public static Script fromAsmString(String program){
+       return new Script(asmToChunks(program));
+    }
+
+    private static List<ScriptChunk> asmToChunks(String str){
+
+        List<ScriptChunk> chunks = new ArrayList<ScriptChunk>();
+
+        String[] tokens = str.split(" ");
+        int i = 0;
+        while (i < tokens.length) {
+            String token = tokens[i];
+            int opCodeNum = OP_INVALIDOPCODE;
+            opCodeNum = ScriptOpCodes.getOpCode(token.replaceFirst("OP_", ""));
+
+            // we start with two special cases, 0 and -1, which are handled specially in
+            // toASM. see _chunkToString.
+            if (token == "0") {
+                opCodeNum = 0;
+                chunks.add(new ScriptChunk(opCodeNum, null));
+                i = i + 1;
+            } else if (token == "-1") {
+                opCodeNum = ScriptOpCodes.OP_1NEGATE;
+                chunks.add(new ScriptChunk(opCodeNum, null));
+                i = i + 1;
+            } else if (opCodeNum == OP_INVALIDOPCODE) {
+                String hex = tokens[i];
+                byte[] buf = HEX.decode(hex);
+                int len = buf.length;
+                if (len >= 0 && len < ScriptOpCodes.OP_PUSHDATA1) {
+                    opCodeNum = len;
+                } else if (len < Math.pow(2, 8)) {
+                    opCodeNum = ScriptOpCodes.OP_PUSHDATA1;
+                } else if (len < Math.pow(2, 16)) {
+                    opCodeNum = ScriptOpCodes.OP_PUSHDATA2;
+                } else if (len < Math.pow(2, 32)) {
+                    opCodeNum = ScriptOpCodes.OP_PUSHDATA4;
+                }
+                chunks.add(new ScriptChunk(opCodeNum, buf));
+                i = i + 1;
+            } else {
+                chunks.add(new ScriptChunk(opCodeNum, null));
+                i = i + 1;
+            }
+        }
+        return chunks;
     }
 
 
@@ -168,9 +217,9 @@ public class Script {
             return "<empty>";
     }
 
-    public String toAsmString(){
+    public String toBitcoindString(){
         if (!chunks.isEmpty()) {
-            List<String> asmStrings = chunks.stream().map(chunk -> chunk.toEncodedString()).collect(Collectors.toList());
+            List<String> asmStrings = chunks.stream().map(chunk -> chunk.toEncodedString(false)).collect(Collectors.toList());
             return Utils.SPACE_JOINER.join(asmStrings);
         } else {
             return "<empty>";
@@ -570,4 +619,43 @@ public class Script {
     public int hashCode() {
         return Arrays.hashCode(getQuickProgram());
     }
+
+
+
+    /*
+    SCRIPT_ERR_CLEANSTACK
+    bool CScript::IsPushOnly(const_iterator pc) const {
+    while (pc < end()) {
+        opcodetype opcode;
+        if (!GetOp(pc, opcode)) return false;
+        // Note that IsPushOnly() *does* consider OP_RESERVED to be a push-type
+        // opcode, however execution of OP_RESERVED fails, so it's not relevant
+        // to P2SH/BIP62 as the scriptSig would fail prior to the P2SH special
+        // validation code being executed.
+        if (opcode > OP_16) return false;
+    }
+    return true;
+}
+
+bool CScript::IsPushOnly() const {
+    return this->IsPushOnly(begin());
+}
+     */
+    public static boolean isPushOnly(Script scriptSig) {
+
+        List<ScriptChunk> chunks = scriptSig.getChunks();
+
+        if (chunks.isEmpty()){
+            return true;
+        }
+
+        for (ScriptChunk chunk : chunks){
+            if (!chunk.isPushData()){
+                return false;
+            }
+        }
+
+        return true;
+    }
+
 }

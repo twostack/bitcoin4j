@@ -44,7 +44,8 @@ public class Interpreter {
 
     private static final Logger log = LoggerFactory.getLogger(Script.class);
 
-    public static final long MAX_SCRIPT_ELEMENT_SIZE = 520;  // bytes
+//    public static final long MAX_SCRIPT_ELEMENT_SIZE = 520;  // bytes
+    public static final long MAX_SCRIPT_ELEMENT_SIZE = 2147483647;  // 2Gigabytes after Genesis - (2^31 -1)
     private static final int MAX_OPS_PER_SCRIPT = 201;
     private static final int MAX_STACK_SIZE = 1000;
     private static final int DEFAULT_MAX_NUM_ELEMENT_SIZE = 4;
@@ -160,27 +161,10 @@ public class Interpreter {
 
 
         switch (opcode) {
-            case OP_INVERT:
-            case OP_LSHIFT:
-            case OP_RSHIFT:
-
             case OP_2MUL:
             case OP_2DIV:
-            case OP_MUL:
                 //disabled codes
                 return true;
-
-            case OP_CAT:
-            case OP_SPLIT:
-            case OP_AND:
-            case OP_OR:
-            case OP_XOR:
-            case OP_DIV:
-            case OP_MOD:
-            case OP_NUM2BIN:
-            case OP_BIN2NUM:
-                //enabled codes, still disabled if flag is not activated
-                return !verifyFlags.contains(VerifyFlag.MONOLITH_OPCODES);
 
             default:
                 //not an opcode that was ever disabled
@@ -218,11 +202,15 @@ public class Interpreter {
 
         LinkedList<byte[]> altstack = new LinkedList<>();
         LinkedList<Boolean> ifStack = new LinkedList<>();
+        LinkedList<Boolean> elseStack = new LinkedList<>();
+        boolean nonTopLevelReturnAfterGenesis = false;
 
         int nextLocationInScript = 0;
         for (ScriptChunk chunk : script.chunks) {
-            boolean shouldExecute = !ifStack.contains(false);
             int opcode = chunk.opcode;
+
+            // Do not execute instructions if Genesis OP_RETURN was found in executed branches.
+            boolean shouldExecute = !ifStack.contains(false) && (!nonTopLevelReturnAfterGenesis || opcode == OP_RETURN);
             nextLocationInScript += chunk.size();
 
             // Check stack element size
@@ -237,7 +225,7 @@ public class Interpreter {
             }
 
             // Disabled opcodes.
-            if (isOpcodeDisabled(opcode, verifyFlags)){
+            if (isOpcodeDisabled(opcode, verifyFlags) && (!verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) || shouldExecute)){
                 throw new ScriptException(ScriptError.SCRIPT_ERR_DISABLED_OPCODE, "Script included a disabled Script Op.");
             }
 
@@ -254,32 +242,45 @@ public class Interpreter {
 
                 switch (opcode) {
                     case OP_IF:
-                        if (!shouldExecute) {
-                            ifStack.add(false);
-                            continue;
-                        }
-                        if (stack.size() < 1)
-                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNBALANCED_CONDITIONAL, "Attempted OP_IF on an empty stack");
-                        ifStack.add(castToBool(stack.pollLast()));
-                        continue;
                     case OP_NOTIF:
-                        if (!shouldExecute) {
-                            ifStack.add(false);
-                            continue;
+                        boolean fValue = false;
+                        if (shouldExecute){
+                            if (stack.size() < 1){
+                                throw new ScriptException(ScriptError.SCRIPT_ERR_UNBALANCED_CONDITIONAL, "Attempted OP_IF on an empty stack");
+                            }
+
+                            byte[] stacktop = stack.getLast();
+                            if (verifyFlags.contains(VerifyFlag.MINIMALIF)) {
+                                if (stacktop.length > 1){
+                                    throw new ScriptException(ScriptError.SCRIPT_ERR_MINIMALIF, "Argument for OP_IF/NOT_IF must be 0x01 or empty");
+                                }
+
+                                if (stacktop.length == 1 && stacktop[0] != 1){
+                                    throw new ScriptException(ScriptError.SCRIPT_ERR_MINIMALIF, "Argument for OP_IF/NOT_IF must be 0x01 or empty");
+                                }
+                            }
+
+                            fValue = castToBool(stacktop);
+                            if (opcode == OP_NOTIF){
+                                fValue = !fValue;
+                            }
+                            stack.pollLast(); //pop top value off stack
                         }
-                        if (stack.size() < 1)
-                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNBALANCED_CONDITIONAL, "Attempted OP_NOTIF on an empty stack");
-                        ifStack.add(!castToBool(stack.pollLast()));
+                        ifStack.add(fValue);
+                        elseStack.add(false);
                         continue;
                     case OP_ELSE:
-                        if (ifStack.isEmpty())
+                        //only one ELSE is allowed in IF after genesis
+                        if (ifStack.isEmpty() || (!elseStack.isEmpty() && elseStack.getLast() && verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS)))
                             throw new ScriptException(ScriptError.SCRIPT_ERR_UNBALANCED_CONDITIONAL, "Attempted OP_ELSE without OP_IF/NOTIF");
                         ifStack.add(!ifStack.pollLast());
+                        elseStack.set(elseStack.size() - 1, true);
                         continue;
                     case OP_ENDIF:
                         if (ifStack.isEmpty())
                             throw new ScriptException(ScriptError.SCRIPT_ERR_UNBALANCED_CONDITIONAL, "Attempted OP_ENDIF without OP_IF/NOTIF");
                         ifStack.pollLast();
+                        elseStack.pollLast();
                         continue;
 
                         // OP_0 is no opcode
@@ -313,7 +314,19 @@ public class Interpreter {
                             throw new ScriptException(ScriptError.SCRIPT_ERR_VERIFY, "OP_VERIFY failed");
                         break;
                     case OP_RETURN:
-                        throw new ScriptException(ScriptError.SCRIPT_ERR_OP_RETURN, "Script called OP_RETURN");
+                        if (verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS)){
+                            if (ifStack.isEmpty()){
+                                // Terminate the execution as successful. The remainder of the script does not affect the validity (even in
+                                // presence of unbalanced IFs, invalid opcodes etc)
+                                return;
+                            }
+                            nonTopLevelReturnAfterGenesis = true;
+                        }else {
+                            // Pre-Genesis OP_RETURN marks script as invalid
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_OP_RETURN, "Script called OP_RETURN");
+                        }
+                        break;
+
                     case OP_TOALTSTACK:
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_TOALTSTACK on an empty stack");
@@ -561,8 +574,21 @@ public class Interpreter {
                         stack.add(Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(stack.getLast().length), false)));
                         break;
 
-                    case OP_INVERT:
-                        throw new ScriptException(ScriptError.SCRIPT_ERR_DISABLED_OPCODE, "Attempted to use disabled Script Op.");
+                    case OP_LSHIFT:
+                    case OP_RSHIFT:
+                        throw new ScriptException(ScriptError.SCRIPT_ERR_DISABLED_OPCODE, "LSHIFT and RSHIFT are pending implementation");
+                    case OP_INVERT: {
+                        if (stack.size() < 1) {
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "No elements left on stack.");
+                        }
+                        byte[] vch1 = stack.pollLast();
+                        // To avoid allocating, we modify vch1 in place
+                        for (int i = 0; i < vch1.length; i++) {
+                            vch1[i] = (byte) (~vch1[i] & 0xFF);
+                        }
+
+                        break;
+                    }
                     case OP_AND:
                     case OP_OR:
                     case OP_XOR:
@@ -571,8 +597,8 @@ public class Interpreter {
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
                         }
 
-                        //valtype &vch1 = stacktop(-2);
                         //valtype &vch2 = stacktop(-1);
+                        //valtype &vch1 = stacktop(-2);
                         byte[] vch2 = stack.pollLast();
                         byte[] vch1 = stack.pollLast();
 
@@ -666,6 +692,7 @@ public class Interpreter {
                     case OP_ADD:
                     case OP_SUB:
                     case OP_DIV:
+                    case OP_MUL:
                     case OP_MOD:
                     case OP_BOOLAND:
                     case OP_BOOLOR:
@@ -689,6 +716,10 @@ public class Interpreter {
                                 break;
                             case OP_SUB:
                                 numericOPresult = numericOPnum1.subtract(numericOPnum2);
+                                break;
+
+                            case OP_MUL:
+                                numericOPresult = numericOPnum1.multiply(numericOPnum2);
                                 break;
 
                             case OP_DIV:
@@ -886,6 +917,9 @@ public class Interpreter {
                         break;
 
                     default:
+                        if (isInvalidBranchingOpcode(opcode) && verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && !shouldExecute){
+                            break;
+                        }
                         throw new ScriptException(ScriptError.SCRIPT_ERR_BAD_OPCODE, "Script used a reserved or disabled opcode: " + opcode);
                 }
             }
@@ -896,6 +930,10 @@ public class Interpreter {
 
         if (!ifStack.isEmpty())
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNBALANCED_CONDITIONAL, "OP_IF/OP_NOTIF without OP_ENDIF");
+    }
+
+    private static boolean isInvalidBranchingOpcode(int opcode) {
+        return opcode == OP_VERIF || opcode == OP_VERNOTIF;
     }
 
 
@@ -958,6 +996,11 @@ public class Interpreter {
 //    public void correctlySpends(Transaction txn, long scriptSigIndex, Script scriptPubKey, Coin value, Set<VerifyFlag> verifyFlags) throws ScriptException {
         // Clone the transaction because executing the script involves editing it, and if we die, we'll leave
         // the tx half broken (also it's not so thread safe to work on it directly.
+
+        if (verifyFlags.contains(VerifyFlag.SIGPUSHONLY) && !Script.isPushOnly(scriptSig)){
+           throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_PUSHONLY, "No pushdata operations allowed in scriptSig");
+        }
+
         Transaction transaction;
         try {
             transaction = new Transaction(ByteBuffer.wrap(txn.serialize()));
@@ -978,7 +1021,7 @@ public class Interpreter {
         executeScript(transaction, scriptSigIndex, scriptPubKey, stack, satoshis, verifyFlags);
 
         if (stack.size() == 0)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_CLEANSTACK, "Stack empty at end of script execution.");
+            throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "Stack empty at end of script execution.");
 
         if (!castToBool(stack.pollLast()))
             throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "Script resulted in a non-true stack: " + stack);

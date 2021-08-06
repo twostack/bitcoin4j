@@ -153,9 +153,8 @@ public class ScriptChunk {
         return opcodeLength + pushDataSizeLength + dataLength;
     }
 
-    public String toEncodedString(){
+    public String toEncodedString(boolean asm){
 
-        boolean asm = false;
         StringBuffer str = new StringBuffer();
         if (data == null || data.length <= 0) {
 //            if (chunk.opcodenum == null) return "";

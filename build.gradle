@@ -6,7 +6,7 @@ plugins {
 }
 
 group 'org.twostack'
-version '1.4.1'
+version '1.4.2-SNAPSHOT'
 
 repositories {
     mavenCentral()
@@ -21,6 +21,7 @@ javadoc {
 }
 
 java {
+    sourceCompatibility = JavaVersion.toVersion("1.8")
     withJavadocJar()
     withSourcesJar()
 }

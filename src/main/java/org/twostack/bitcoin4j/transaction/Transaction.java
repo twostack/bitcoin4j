@@ -248,7 +248,13 @@ public class Transaction {
     public String getTransactionId(){
         byte[] idBytes = getTransactionIdBytes();
         if (idBytes.length == 0) {
-            return "";
+            try {
+                byte[] rawTx = this.serialize();
+                this.txHash = ByteBuffer.wrap(Sha256Hash.hashTwice(rawTx));
+                idBytes = getTransactionIdBytes();
+            } catch(IOException ex){
+                return "";
+            }
         }
         return Utils.HEX.encode(idBytes);
     }
