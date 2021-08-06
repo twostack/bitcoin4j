@@ -26,6 +26,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 /**
  * A TransactionSignature wraps an {@link ECKey.ECDSASignature} and adds methods for handling
@@ -143,12 +144,8 @@ public class TransactionSignature extends ECKey.ECDSASignature {
         // Bitcoin encoding is DER signature + sighash byte.
         if (requireCanonicalEncoding && !isEncodingCanonical(bytes))
             throw new VerificationException("Signature encoding is not canonical.");
-        ECKey.ECDSASignature sig;
-        try {
-            sig = ECKey.ECDSASignature.decodeFromDER(bytes);
-        } catch (IllegalArgumentException e) {
-            throw new VerificationException("Could not decode DER", e);
-        }
+        ECKey.ECDSASignature sig = ECKey.ECDSASignature.decodeFromDER(bytes);
+
         if (requireCanonicalSValue && !sig.isCanonical())
             throw new VerificationException("S-value is not canonical.");
 

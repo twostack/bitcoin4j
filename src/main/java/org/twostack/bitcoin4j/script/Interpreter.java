@@ -54,7 +54,9 @@ public class Interpreter {
     public static final int SIG_SIZE = 75;
     /** Max number of sigops allowed in a standard p2sh redeem script */
     public static final int MAX_P2SH_SIGOPS = 15;
+    public static final int DEFAULT_SCRIPT_NUM_LENGTH_POLICY_AFTER_GENESIS = 250 * 1024;
 
+    public static final int MAX_SCRIPT_ELEMENT_SIZE_BEFORE_GENESIS = 520;
 
     ////////////////////// Script verification and helpers ////////////////////////////////
 
@@ -90,7 +92,7 @@ public class Interpreter {
      */
     /* package private */ static BigInteger castToBigInteger(final byte[] chunk, final int maxLength, final boolean requireMinimal) throws ScriptException {
         if (chunk.length > maxLength)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Script attempted to use an integer larger than " + maxLength + " bytes");
+            throw new ScriptException(ScriptError.SCRIPT_ERR_NUMBER_OVERFLOW, "Script attempted to use an integer larger than " + maxLength + " bytes");
 
         if (requireMinimal && chunk.length > 0) {
             // Check that the number is encoded with the minimum possible
@@ -106,7 +108,7 @@ public class Interpreter {
                 // is +-255, which encode to 0xff00 and 0xff80 respectively.
                 // (big-endian).
                 if (chunk.length <= 1 || (chunk[chunk.length - 2] & 0x80) == 0) {
-                    throw  new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "non-minimally encoded script number");
+                    throw  new ScriptException(ScriptError.SCRIPT_ERR_NUMBER_MINENCODE, "non-minimally encoded script number");
                 }
             }
         }
@@ -214,13 +216,13 @@ public class Interpreter {
             nextLocationInScript += chunk.size();
 
             // Check stack element size
-            if (chunk.data != null && chunk.data.length > MAX_SCRIPT_ELEMENT_SIZE)
+            if (chunk.data != null && (!verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && chunk.data.length > MAX_SCRIPT_ELEMENT_SIZE_BEFORE_GENESIS))
                 throw new ScriptException(ScriptError.SCRIPT_ERR_PUSH_SIZE, "Attempted to push a data string larger than 520 bytes");
 
             // Note how OP_RESERVED does not count towards the opcode limit.
             if (opcode > OP_16) {
                 opCount++;
-                if (opCount > MAX_OPS_PER_SCRIPT)
+                if (opCount > DEFAULT_SCRIPT_NUM_LENGTH_POLICY_AFTER_GENESIS)
                     throw new ScriptException(ScriptError.SCRIPT_ERR_OP_COUNT, "More script operations than is allowed");
             }
 
@@ -477,8 +479,8 @@ public class Interpreter {
                         byte[] catBytes1 = stack.pollLast();
 
                         int len = catBytes1.length + catBytes2.length;
-                        if (len > MAX_SCRIPT_ELEMENT_SIZE)
-                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Push value size limit exceeded.");
+                        if (!verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && len > MAX_SCRIPT_ELEMENT_SIZE_BEFORE_GENESIS)
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_PUSH_SIZE, "Push value size limit exceeded.");
 
                         byte[] catOut = new byte[len];
                         System.arraycopy(catBytes1, 0, catOut, 0, catBytes1.length);
@@ -493,8 +495,8 @@ public class Interpreter {
 
                         int numSize = castToBigInteger(stack.pollLast(), enforceMinimal).intValue();
 
-                        if (numSize > MAX_SCRIPT_ELEMENT_SIZE)
-                            throw new ScriptException(ScriptError.SCRIPT_ERR_STACK_SIZE, "Push value size limit exceeded.");
+                        if (!verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && numSize > MAX_SCRIPT_ELEMENT_SIZE_BEFORE_GENESIS)
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_PUSH_SIZE, "Push value size limit exceeded.");
 
                         byte[] rawNumBytes = stack.pollLast();
 
@@ -503,7 +505,7 @@ public class Interpreter {
                         byte[] minimalNumBytes = Utils.minimallyEncodeLE(rawNumBytes);
                         if (minimalNumBytes.length > numSize) {
                             //we can't
-                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "The requested encoding is impossible to satisfy.");
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_PUSH_SIZE, "The requested encoding is impossible to satisfy.");
                         }
 
                         if (minimalNumBytes.length == numSize) {
@@ -543,7 +545,7 @@ public class Interpreter {
                         byte[] splitBytes = stack.pollLast();
 
                         if (splitPos > splitBytes.length || splitPos < 0)
-                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Invalid OP_SPLIT range.");
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_SPLIT_RANGE, "Invalid OP_SPLIT range.");
 
                         byte[] splitOut1 = new byte[splitPos];
                         byte[] splitOut2 = new byte[splitBytes.length - splitPos];
@@ -563,7 +565,7 @@ public class Interpreter {
                         byte[] numBytes = Utils.minimallyEncodeLE(binBytes);
 
                         if (!Utils.checkMinimallyEncodedLE(numBytes, DEFAULT_MAX_NUM_ELEMENT_SIZE))
-                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Given operand is not a number within the valid range [-2^31...2^31]");
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_INVALID_NUMBER_RANGE, "Given operand is not a number within the valid range [-2^31...2^31]");
 
                         stack.addLast(numBytes);
 
@@ -586,6 +588,7 @@ public class Interpreter {
                         for (int i = 0; i < vch1.length; i++) {
                             vch1[i] = (byte) (~vch1[i] & 0xFF);
                         }
+                        stack.push(vch1);
 
                         break;
                     }
@@ -604,7 +607,7 @@ public class Interpreter {
 
                         // Inputs must be the same size
                         if (vch1.length != vch2.length) {
-                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Invalid operand size.");
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_OPERAND_SIZE, "Invalid operand size.");
                         }
 
                         // To avoid allocating, we modify vch1 in place.
@@ -724,13 +727,13 @@ public class Interpreter {
 
                             case OP_DIV:
                                 if (numericOPnum2.intValue() == 0)
-                                    throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Division by zero error");
+                                    throw new ScriptException(ScriptError.SCRIPT_ERR_DIV_BY_ZERO, "Division by zero error");
                                 numericOPresult = numericOPnum1.divide(numericOPnum2);
                                 break;
 
                             case OP_MOD:
                                 if (numericOPnum2.intValue() == 0)
-                                    throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Modulo by zero error");
+                                    throw new ScriptException(ScriptError.SCRIPT_ERR_MOD_BY_ZERO, "Modulo by zero error");
 
                                 /**
                                  * BigInteger doesn't behave the way we want for modulo operations.  Firstly it's
@@ -902,8 +905,18 @@ public class Interpreter {
                         }
                         executeCheckLockTimeVerify(txContainingThis, (int) index, stack, verifyFlags);
                         break;
+
+                    case OP_CHECKSEQUENCEVERIFY:
+                        if (!verifyFlags.contains(VerifyFlag.CHECKSEQUENCEVERIFY)) {
+                            // not enabled; treat as a NOP3
+                            if (verifyFlags.contains(VerifyFlag.DISCOURAGE_UPGRADABLE_NOPS)) {
+                                throw new ScriptException(ScriptError.SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS, "Script used a reserved opcode " + opcode);
+                            }
+                            break;
+                        }
+                        executeCheckSequenceVerify(txContainingThis, (int) index, stack, verifyFlags);
+                        break;
                     case OP_NOP1:
-                    case OP_NOP3:
                     case OP_NOP4:
                     case OP_NOP5:
                     case OP_NOP6:
@@ -1042,7 +1055,7 @@ public class Interpreter {
         if (verifyFlags.contains(VerifyFlag.P2SH) && ScriptPattern.isP2SH(scriptPubKey)) {
             for (ScriptChunk chunk : scriptSig.getChunks())
                 if (chunk.isOpCode() && chunk.opcode > OP_16)
-                    throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Attempted to spend a P2SH scriptPubKey with a script that contained script ops");
+                    throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_PUSHONLY, "Attempted to spend a P2SH scriptPubKey with a script that contained script ops");
 
             byte[] scriptPubKeyBytes = p2shStack.pollLast();
             Script scriptPubKeyP2SH = new Script(scriptPubKeyBytes);
@@ -1065,7 +1078,7 @@ public class Interpreter {
                 || verifyFlags.contains(VerifyFlag.DERSIG)
                 || verifyFlags.contains(VerifyFlag.LOW_S);
         if (stack.size() < 2)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_STACK_SIZE, "Attempted OP_CHECKSIG(VERIFY) on a stack with size < 2");
+            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKSIG(VERIFY) on a stack with size < 2");
         byte[] pubKey = stack.pollLast();
         byte[] sigBytes = stack.pollLast();
 
@@ -1115,6 +1128,57 @@ public class Interpreter {
                 throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKSIGVERIFY, "Script failed OP_CHECKSIGVERIFY");
     }
 
+
+    private static boolean isCanonicalPubkey(byte[] pubkey) {
+        if (pubkey.length < 33) {
+            //  Non-canonical public key: too short
+            return false;
+        }
+        if (pubkey[0] == 0x04) {
+            if (pubkey.length != 65) {
+                //  Non-canonical public key: invalid length for uncompressed key
+                return false;
+            }
+        } else if (pubkey[0] == 0x02 || pubkey[0] == 0x03) {
+            if (pubkey.length != 33) {
+                //  Non-canonical public key: invalid length for compressed key
+                return false;
+            }
+        } else {
+            //  Non-canonical public key: neither compressed nor uncompressed
+            return false;
+        }
+        return true;
+    }
+
+    private static boolean isCompressedPubKey(byte[] pubKey) {
+        if (pubKey.length != 33) {
+            //  Non-canonical public key: invalid length for compressed key
+            return false;
+        }
+        if (pubKey[0] != 0x02 && pubKey[0] != 0x03) {
+            //  Non-canonical public key: invalid prefix for compressed key
+            return false;
+        }
+        return true;
+    }
+
+
+
+    private static boolean checkPubKeyEncoding(byte[] pubKey, Set<VerifyFlag> flags) throws ScriptException{
+
+       if (flags.contains(VerifyFlag.STRICTENC) && !isCanonicalPubkey(pubKey)) {
+           throw new ScriptException(ScriptError.SCRIPT_ERR_PUBKEYTYPE, "Public key has invalid encoding");
+       }
+
+       if (flags.contains(VerifyFlag.COMPRESSED_PUBKEYTYPE) && !isCompressedPubKey(pubKey)){
+           throw new ScriptException(ScriptError.SCRIPT_ERR_NONCOMPRESSED_PUBKEY, "Public key has invalid encoding");
+       }
+
+       return true;
+    }
+
+
     private static int executeMultiSig(Transaction txContainingThis, int index, Script script, LinkedList<byte[]> stack,
                                        int opCount, int lastCodeSepLocation, int opcode, Coin value,
                                        Set<VerifyFlag> verifyFlags) throws ScriptException {
@@ -1122,16 +1186,19 @@ public class Interpreter {
                 || verifyFlags.contains(VerifyFlag.DERSIG)
                 || verifyFlags.contains(VerifyFlag.LOW_S);
         final boolean enforceMinimal = verifyFlags.contains(VerifyFlag.MINIMALDATA);
-        if (stack.size() < 2)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_STACK_SIZE, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < 2");
+
+        if (stack.size() < 1)
+            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < 2");
+
         int pubKeyCount = castToBigInteger(stack.pollLast(), enforceMinimal).intValue();
-        if (pubKeyCount < 0 || pubKeyCount > 20)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "OP_CHECKMULTISIG(VERIFY) with pubkey count out of range");
+        if (pubKeyCount < 0 || (!verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && pubKeyCount > 20)
+                || (verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && pubKeyCount > Integer.MAX_VALUE))
+            throw new ScriptException(ScriptError.SCRIPT_ERR_PUBKEY_COUNT, "OP_CHECKMULTISIG(VERIFY) with pubkey count out of range");
         opCount += pubKeyCount;
-        if (opCount > 201)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "Total op count > 201 during OP_CHECKMULTISIG(VERIFY)");
+        if (opCount > DEFAULT_SCRIPT_NUM_LENGTH_POLICY_AFTER_GENESIS)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "Total op (count > 250 * 1024) during OP_CHECKMULTISIG(VERIFY)");
         if (stack.size() < pubKeyCount + 1)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < num_of_pubkeys + 2");
+            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < num_of_pubkeys + 2");
 
         LinkedList<byte[]> pubkeys = new LinkedList<byte[]>();
         for (int i = 0; i < pubKeyCount; i++) {
@@ -1141,9 +1208,9 @@ public class Interpreter {
 
         int sigCount = castToBigInteger(stack.pollLast(), enforceMinimal).intValue();
         if (sigCount < 0 || sigCount > pubKeyCount)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "OP_CHECKMULTISIG(VERIFY) with sig count out of range");
+            throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_COUNT, "OP_CHECKMULTISIG(VERIFY) with sig count out of range");
         if (stack.size() < sigCount + 1)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < num_of_pubkeys + num_of_signatures + 3");
+            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < num_of_pubkeys + num_of_signatures + 3");
 
         LinkedList<byte[]> sigs = new LinkedList<byte[]>();
         for (int i = 0; i < sigCount; i++) {
@@ -1169,8 +1236,16 @@ public class Interpreter {
             byte[] pubKey = pubkeys.pollFirst();
             // We could reasonably move this out of the loop, but because signature verification is significantly
             // more expensive than hashing, its not a big deal.
+
+            //FIXME: Check Signature Encoding
+
+            //CHECK Pubkey Encoding
+            checkPubKeyEncoding(pubKey, verifyFlags);
+
             try {
-                TransactionSignature sig = TransactionSignature.decodeFromBitcoin(sigs.getFirst(), requireCanonical);
+
+
+                TransactionSignature sig = TransactionSignature.decodeFromBitcoin(sigs.getFirst(), requireCanonical, verifyFlags.contains(VerifyFlag.LOW_S));
 
                 SigHash sigHash = new SigHash();
 
@@ -1211,4 +1286,75 @@ public class Interpreter {
     }
 
 
+    private static void executeCheckSequenceVerify(Transaction txContainingThis, int index, LinkedList<byte[]> stack, Set<VerifyFlag> verifyFlags) throws ScriptException {
+        if (stack.size() < 1)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKSEQUENCEVERIFY on a stack with size < 1");
+
+        // Note that elsewhere numeric opcodes are limited to
+        // operands in the range -2**31+1 to 2**31-1, however it is
+        // legal for opcodes to produce results exceeding that
+        // range. This limitation is implemented by CScriptNum's
+        // default 4-byte limit.
+        //
+        // Thus as a special case we tell CScriptNum to accept up
+        // to 5-byte bignums, which are good until 2**39-1, well
+        // beyond the 2**32-1 limit of the nSequence field itself.
+        final long nSequence = castToBigInteger(stack.getLast(), 5, verifyFlags.contains(VerifyFlag.MINIMALDATA)).longValue();
+
+        // In the rare event that the argument may be < 0 due to
+        // some arithmetic being done first, you can always use
+        // 0 MAX CHECKSEQUENCEVERIFY.
+        if (nSequence < 0)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_NEGATIVE_LOCKTIME, "Negative sequence");
+
+        // To provide for future soft-fork extensibility, if the
+        // operand has the disabled lock-time flag set,
+        // CHECKSEQUENCEVERIFY behaves as a NOP.
+        if ((nSequence & TransactionInput.SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0)
+            return;
+
+        // Compare the specified sequence number with the input.
+        checkSequence(nSequence, txContainingThis, index);
+    }
+
+    private static void checkSequence(long nSequence, Transaction txContainingThis, int index) {
+        // Relative lock times are supported by comparing the passed
+        // in operand to the sequence number of the input.
+        long txToSequence = txContainingThis.getInputs().get(index).getSequenceNumber();
+
+        // Fail if the transaction's version number is not set high
+        // enough to trigger BIP 68 rules.
+        if (txContainingThis.getVersion() < 2)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Transaction version is < 2");
+
+        // Sequence numbers with their most significant bit set are not
+        // consensus constrained. Testing that the transaction's sequence
+        // number do not have this bit set prevents using this property
+        // to get around a CHECKSEQUENCEVERIFY check.
+        if ((txToSequence & TransactionInput.SEQUENCE_LOCKTIME_DISABLE_FLAG) != 0)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Sequence disable flag is set");
+
+        // Mask off any bits that do not have consensus-enforced meaning
+        // before doing the integer comparisons
+        long nLockTimeMask =  TransactionInput.SEQUENCE_LOCKTIME_TYPE_FLAG | TransactionInput.SEQUENCE_LOCKTIME_MASK;
+        long txToSequenceMasked = txToSequence & nLockTimeMask;
+        long nSequenceMasked = nSequence & nLockTimeMask;
+
+        // There are two kinds of nSequence: lock-by-blockheight
+        // and lock-by-blocktime, distinguished by whether
+        // nSequenceMasked < CTxIn::SEQUENCE_LOCKTIME_TYPE_FLAG.
+        //
+        // We want to compare apples to apples, so fail the script
+        // unless the type of nSequenceMasked being tested is the same as
+        // the nSequenceMasked in the transaction.
+        if (!((txToSequenceMasked < TransactionInput.SEQUENCE_LOCKTIME_TYPE_FLAG && nSequenceMasked < TransactionInput.SEQUENCE_LOCKTIME_TYPE_FLAG) ||
+                (txToSequenceMasked >= TransactionInput.SEQUENCE_LOCKTIME_TYPE_FLAG && nSequenceMasked >= TransactionInput.SEQUENCE_LOCKTIME_TYPE_FLAG))) {
+            throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Relative locktime requirement type mismatch");
+        }
+
+        // Now that we know we're comparing apples-to-apples, the
+        // comparison is a simple numeric one.
+        if (nSequenceMasked > txToSequenceMasked)
+            throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Relative locktime requirement not satisfied");
+    }
 }

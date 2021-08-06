@@ -83,10 +83,12 @@ public class Script {
         DISCOURAGE_UPGRADABLE_NOPS, // Discourage use of NOPs reserved for upgrades (NOP1-10)
         CLEANSTACK, // Require that only a single stack element remains after evaluation.
         CHECKLOCKTIMEVERIFY, // Enable CHECKLOCKTIMEVERIFY operation
+        CHECKSEQUENCEVERIFY,
         ENABLESIGHASHFORKID,
         MONOLITH_OPCODES, // May 15, 2018 Hard fork
         UTXO_AFTER_GENESIS,
-        MINIMALIF
+        MINIMALIF,
+        COMPRESSED_PUBKEYTYPE
     }
     public static final EnumSet<VerifyFlag> ALL_VERIFY_FLAGS = EnumSet.allOf(VerifyFlag.class);
 

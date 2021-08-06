@@ -2,6 +2,12 @@
 ["Copyright (c) 2018-2019 Bitcoin Association"],
 ["Distributed under the Open BSV software license, see the accompanying file LICENSE."],
 ["Presumably there is an earlier copyright from the Bitcoin Core developers and/or the Bitcoin ABC developers but it was not listed"],
+["Format is: [scriptSig, scriptPubKey, flags, expected_scripterror, ... comments]"],
+["It is evaluated as if there was a crediting coinbase transaction with two 0"],
+["pushes as scriptSig, and one output of 0 satoshi and given scriptPubKey,"],
+["followed by a spending transaction which spends this output as only input (and"],
+["correct prevout hash), using the given scriptSig. All nLockTimes are 0, all"],
+["nSequences are max."],
 ["1 1","IF IF 1 ELSE 0 ENDIF ELSE IF 0 ELSE 1 ENDIF ENDIF","P2SH,STRICTENC,UTXO_AFTER_GENESIS","OK", "Multiple ELSEs in script but only one per IF."],
 ["1 1","IF IF 1 ELSE 0 ELSE 1 ENDIF ELSE IF 0 ELSE 1 ENDIF ENDIF","P2SH,STRICTENC,UTXO_AFTER_GENESIS","UNBALANCED_CONDITIONAL", "Multiple ELSEs in nested IF."],
 ["1 1","IF IF 1 ELSE 0 ELSE 1 ENDIF ELSE IF 0 ELSE 1 ENDIF ENDIF","P2SH,STRICTENC","OK", "Multiple ELSEs in nested IF."],
@@ -130,8 +136,6 @@
 ["2 0","IF 2MUL ENDIF","P2SH,STRICTENC,UTXO_AFTER_GENESIS","OK"],
 ["2 0","IF 2DIV ENDIF","P2SH,STRICTENC,UTXO_AFTER_GENESIS","OK"],
 
-["1","RETURN 0x3044022044dc17b0887c161bb67ba9635bf758735bdde503e4b0a0987f587f14a4e1143d022009a215772d49a85dae40d8ca03955af26ad3978a0ff965faa12915e9586249a501","","OP_RETURN"],
-["1","RETURN 0x3044022044dc17b0887c161bb67ba9635bf758735bdde503e4b0a0987f587f14a4e1143d022009a215772d49a85dae40d8ca03955af26ad3978a0ff965faa12915e9586249a501","UTXO_AFTER_GENESIS","OK"],
 
 ["1 1","VERIFY","P2SH,STRICTENC","OK"],
 ["1 0x05 0x0100000000","VERIFY","P2SH,STRICTENC","OK","values >4 bytes can be cast to boolean"],
@@ -752,15 +756,6 @@
     "2-of-2 CHECKMULTISIG NOT with both pubkeys valid, but second signature invalid. Valid pubkey fails, and CHECKMULTISIG exits early, prior to evaluation of second invalid signature."
 ],
 
-["Increase test coverage for DERSIG"],
-["0x4a 0x0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000","0 CHECKSIG NOT","","OK","Overly long signature is correctly encoded"],
-["0x25 0x30220220000000000000000000000000000000000000000000000000000000000000000000","0 CHECKSIG NOT","","OK","Missing S is correctly encoded"],
-["0x27 0x3024021077777777777777777777777777777777020a7777777777777777777777777777777701","0 CHECKSIG NOT","","OK","S with invalid S length is correctly encoded"],
-["0x27 0x302403107777777777777777777777777777777702107777777777777777777777777777777701","0 CHECKSIG NOT","","OK","Non-integer R is correctly encoded"],
-["0x27 0x302402107777777777777777777777777777777703107777777777777777777777777777777701","0 CHECKSIG NOT","","OK","Non-integer S is correctly encoded"],
-["0x17 0x3014020002107777777777777777777777777777777701","0 CHECKSIG NOT","","OK","Zero-length R is correctly encoded"],
-["0x17 0x3014021077777777777777777777777777777777020001","0 CHECKSIG NOT","","OK","Zero-length S is correctly encoded for DERSIG"],
-["0x27 0x302402107777777777777777777777777777777702108777777777777777777777777777777701","0 CHECKSIG NOT","","OK","Negative S is correctly encoded"],
 
 ["2147483648","CHECKSEQUENCEVERIFY","CHECKSEQUENCEVERIFY","OK","CSV passes if stack top bit 1 << 31 is set"],
 
