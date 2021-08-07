@@ -47,7 +47,7 @@ public class SigHashTest {
         }
     }
 
-    //FIXME: IMPORTANT: Sighash vectors have been pruned by about 10 tests which generated
+    //FIXME: IMPORTANT: Sighash vectors (from bsv javascript library) have been pruned by about 10 tests which generated
     // BigInt values on TransactionOutput serializer that were > 8 bytes long, throwing Exception.
     // Figure out if this is OK, or if there's a bug with working with BigInteger Max values.
     @Test

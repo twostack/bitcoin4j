@@ -75,16 +75,23 @@ public class TransactionSignature extends ECKey.ECDSASignature {
 
     public static TransactionSignature fromTxFormat(byte[] sigBytes) throws SignatureDecodeException {
 
-        int nhashtype = sigBytes[sigBytes.length - 1];
+        //allow empty signatures
+        if (sigBytes.length == 0){
+            return new TransactionSignature(BigInteger.ONE, BigInteger.ONE, 1);
+        }
+
+        int nhashtype = sigBytes[sigBytes.length - 1] & 0xFF; //cast to unsigned byte value
+
         byte[] signatureBytes = new byte[sigBytes.length - 1];
 
         ByteBuffer byteBuffer = ByteBuffer.wrap(sigBytes);
         byteBuffer.get(signatureBytes, 0, sigBytes.length - 1);
 
 
-        ECKey.ECDSASignature sig = ECKey.ECDSASignature.decodeFromDER(signatureBytes);
+        ECKey.ECDSASignature sig = ECKey.ECDSASignature.decodeFlexDER(signatureBytes, false);
 
         return new TransactionSignature(sig.r, sig.s, nhashtype);
+
     }
 
     public static TransactionSignature fromTxFormat(String encode) throws SignatureDecodeException {
@@ -214,6 +221,11 @@ public class TransactionSignature extends ECKey.ECDSASignature {
 
     public static boolean hasForkId (byte[] signature)
     {
+
+        if (signature.length == 0){
+            return false;
+        }
+
         int forkId = (signature[signature.length-1] & 0xff) & SigHashType.FORKID.value; // mask the byte to prevent sign-extension hurting us
 
         return forkId == SigHashType.FORKID.value;

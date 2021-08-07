@@ -18,9 +18,12 @@
 
 package org.twostack.bitcoin4j.script;
 
+import at.favre.lib.bytes.Bytes;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
+import org.twostack.bitcoin4j.Coin;
+import org.twostack.bitcoin4j.Utils;
 import org.twostack.bitcoin4j.exception.TransactionException;
 import org.twostack.bitcoin4j.exception.VerificationException;
 import org.twostack.bitcoin4j.script.Script.VerifyFlag;
@@ -33,12 +36,14 @@ import org.twostack.bitcoin4j.transaction.*;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigInteger;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static org.twostack.bitcoin4j.Utils.HEX;
 import static org.junit.Assert.*;
 import static org.twostack.bitcoin4j.utils.TestUtil.parseScriptString;
+import static org.twostack.bitcoin4j.utils.TestUtil.parseVerifyFlags;
 
 public class ScriptTest {
     // From tx 05e04c26c12fe408a3c1b71aa7996403f6acad1045252b1c62e055496f4d2cb1 on the testnet.
@@ -164,41 +169,14 @@ public class ScriptTest {
         assertThrows(ScriptException.class, () -> Script.fromBitcoindString(asm));
     }
 
-
-    private Set<VerifyFlag> parseVerifyFlags(String str) {
-        Set<VerifyFlag> flags = EnumSet.noneOf(VerifyFlag.class);
-        if (!"NONE".equals(str)) {
-            for (String flag : str.split(",")) {
-                try {
-                    flags.add(VerifyFlag.valueOf(flag));
-                } catch (IllegalArgumentException x) {
-                    log.debug("Cannot handle verify flag {} -- ignored.", flag);
-                }
-            }
-        }
-        return flags;
-    }
-
-    private Transaction buildCreditingTransaction(Script scriptPubKey) throws TransactionException {
-
-        /*
-        var hashbuf = List<int>(32);
-        hashbuf.fillRange(0, hashbuf.length, 0);
-
-        var txOutLockBuilder = DefaultLockBuilder();
-        txOutLockBuilder.fromScript(scriptPubkey);
-        var txCredOut = TransactionOutput(scriptBuilder: txOutLockBuilder);
-        txCredOut.satoshis = BigInt.from(inputAmount);
-        txCredOut.script = scriptPubkey;
-        credtx.addOutput(txCredOut);
-         */
+    private Transaction buildCreditingTransaction(Script scriptPubKey, BigInteger nValue) throws TransactionException {
 
         Transaction credTx = new Transaction();
-
         Script unlockingScript = new ScriptBuilder().number(0).number(0).build();
         DefaultUnlockBuilder coinbaseUnlockBuilder = new DefaultUnlockBuilder(unlockingScript);
+        byte[] prevTxnId = new byte[32];
         TransactionInput coinbaseInput = new TransactionInput(
-                "0000000000000000000000000000000000000000000000000000000000000000".getBytes(StandardCharsets.UTF_8),
+                prevTxnId,
                 0xffffffff,
                 TransactionInput.MAX_SEQ_NUMBER,
                 coinbaseUnlockBuilder
@@ -206,89 +184,23 @@ public class ScriptTest {
         credTx.addInput(coinbaseInput);
 
         LockingScriptBuilder lockingScriptBuilder = new DefaultLockBuilder(scriptPubKey);
-        TransactionOutput output = new TransactionOutput(BigInteger.ZERO, lockingScriptBuilder);
+        TransactionOutput output = new TransactionOutput(nValue, lockingScriptBuilder);
 
         credTx.addOutput(output);
 
         return credTx;
 
 
-        /*
-        Transaction tx = new Transaction(TESTNET);
-        tx.setVersion(1);
-        tx.setLockTime(0);
-
-        TransactionInput txInput = new TransactionInput(TESTNET, null,
-                new ScriptBuilder().number(0).number(0).build().getProgram());
-        txInput.setSequenceNumber(TransactionInput.NO_SEQUENCE);
-        tx.addInput(txInput);
-
-        TransactionOutput txOutput = new TransactionOutput(TESTNET, tx, Coin.ZERO, scriptPubKey.getProgram());
-        tx.addOutput(txOutput);
-
-        return tx;
-         */
-
-        /*
-        Script unlockingScript = new ScriptBuilder().number(0).number(0).build();
-        UnlockingScriptBuilder unlockingScriptBuilder = new DefaultUnlockBuilder(unlockingScript);
-
-        LockingScriptBuilder lockBuilder = new DefaultLockBuilder(scriptPubKey);
-
-        Transaction tx = new TransactionBuilder()
-                .spendFromOutput(null, 0, BigInteger.ZERO, TransactionInput.MAX_SEQ_NUMBER, unlockingScriptBuilder)
-                .spendTo(lockBuilder, BigInteger.ZERO)
-                .build(false);
-
-        //.withLockTime()
-        //.withVersion()
-
-        return tx;
-        */
-
     }
 
     private Transaction buildSpendingTransaction(Transaction creditingTransaction, Script scriptSig) {
-        /*
-        Transaction tx = new Transaction(TESTNET);
-        tx.setVersion(1);
-        tx.setLockTime(0);
-
-        TransactionInput txInput = new TransactionInput(TESTNET, creditingTransaction, scriptSig.getProgram());
-        txInput.setSequenceNumber(TransactionInput.NO_SEQUENCE);
-        tx.addInput(txInput);
-
-        TransactionOutput txOutput = new TransactionOutput(TESTNET, tx, creditingTransaction.getOutput(0).getValue(),
-                new Script(new byte[] {}).getProgram());
-        tx.addOutput(txOutput);
-
-        return tx;
-         */
-
-        /*
-        var defaultUnlockBuilder = DefaultUnlockBuilder();
-        defaultUnlockBuilder.fromScript(scriptSig);
-        var spendtx = Transaction();
-        var txSpendInput = TransactionInput(
-            prevTxId,
-            0,
-            scriptPubkey,
-            BigInt.zero,
-            TransactionInput.UINT_MAX,
-            scriptBuilder: defaultUnlockBuilder
-        );
-        spendtx.addInput(txSpendInput);
-        var txSpendOutput = TransactionOutput();
-        txSpendOutput.script = SVScript();
-        txSpendOutput.satoshis = BigInt.from(inputAmount);
-        spendtx.addOutput(txSpendOutput);
-         */
 
         Transaction spendingTx = new Transaction();
 
         UnlockingScriptBuilder unlockingScriptBuilder = new DefaultUnlockBuilder(scriptSig);
+
         TransactionInput input = new TransactionInput(
-                creditingTransaction.getTransactionId().getBytes(StandardCharsets.UTF_8),
+                Utils.reverseBytes(creditingTransaction.getTransactionIdBytes()),
                 0,
                 TransactionInput.MAX_SEQ_NUMBER,
                 unlockingScriptBuilder
@@ -296,7 +208,7 @@ public class ScriptTest {
         spendingTx.addInput(input);
 
         LockingScriptBuilder lockingScriptBuilder = new DefaultLockBuilder(new ScriptBuilder().build());
-        TransactionOutput output = new TransactionOutput(creditingTransaction.getOutputs().get(0).getAmount(), lockingScriptBuilder);
+        TransactionOutput output = new TransactionOutput(BigInteger.ZERO, lockingScriptBuilder);
         spendingTx.addOutput(output);
 
         return spendingTx;
@@ -309,13 +221,22 @@ public class ScriptTest {
         for (JsonNode test : json) {
             if (test.size() == 1)
                 continue; // skip comment
-            Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-            ScriptError expectedError = ScriptError.fromMnemonic(test.get(3).asText());
-            System.out.println(test.get(1).asText());
+
+            String nValue = "0";
+            int offset = 0;
+            if (test.size() == 6 && test.get(0).isArray()){
+                //grab the satoshi value from first array
+                nValue = test.get(0).get(0).asText();
+                offset = 1;
+            }
+
+            Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(offset + 2).asText());
+            ScriptError expectedError = ScriptError.fromMnemonic(test.get(offset + 3).asText());
+            System.out.println(test.get(offset + 1).asText());
             try {
-                Script scriptSig = parseScriptString(test.get(0).asText());
-                Script scriptPubKey = parseScriptString(test.get(1).asText());
-                Transaction txCredit = buildCreditingTransaction(scriptPubKey);
+                Script scriptSig = parseScriptString(test.get(offset + 0).asText());
+                Script scriptPubKey = parseScriptString(test.get(offset + 1).asText());
+                Transaction txCredit = buildCreditingTransaction(scriptPubKey, BigInteger.valueOf(Coin.parseCoin(nValue).longValue()));
                 Transaction txSpend = buildSpendingTransaction(txCredit, scriptSig);
 
                 Interpreter interp = new Interpreter();
@@ -336,50 +257,50 @@ public class ScriptTest {
 
 
 
-    @Test
-    public void dataDrivenValidScripts() throws Exception {
-        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
-                "script_valid.json"), Charsets.UTF_8));
-        for (JsonNode test : json) {
-            Script scriptSig = parseScriptString(test.get(0).asText());
-            Script scriptPubKey = parseScriptString(test.get(1).asText());
-            Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-            try {
-
-
-                Interpreter interp = new Interpreter();
-                interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
-
-            } catch (ScriptException e) {
-                System.err.println(test);
-                System.err.flush();
-                throw e;
-            }
-        }
-    }
-
-
-    @Test
-    public void dataDrivenInvalidScripts() throws Exception {
-        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
-                "script_invalid.json"), Charsets.UTF_8));
-        for (JsonNode test : json) {
-            try {
-                Script scriptSig = parseScriptString(test.get(0).asText());
-                Script scriptPubKey = parseScriptString(test.get(1).asText());
-                Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-
-                Interpreter interp = new Interpreter();
-                interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
-
-                System.err.println(test);
-                System.err.flush();
-                fail();
-            } catch (VerificationException e) {
-                // Expected.
-            }
-        }
-    }
+//    @Test
+//    public void dataDrivenValidScripts() throws Exception {
+//        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
+//                "script_valid.json"), Charsets.UTF_8));
+//        for (JsonNode test : json) {
+//            Script scriptSig = parseScriptString(test.get(0).asText());
+//            Script scriptPubKey = parseScriptString(test.get(1).asText());
+//            Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
+//            try {
+//
+//
+//                Interpreter interp = new Interpreter();
+//                interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
+//
+//            } catch (ScriptException e) {
+//                System.err.println(test);
+//                System.err.flush();
+//                throw e;
+//            }
+//        }
+//    }
+//
+//
+//    @Test
+//    public void dataDrivenInvalidScripts() throws Exception {
+//        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
+//                "script_invalid.json"), Charsets.UTF_8));
+//        for (JsonNode test : json) {
+//            try {
+//                Script scriptSig = parseScriptString(test.get(0).asText());
+//                Script scriptPubKey = parseScriptString(test.get(1).asText());
+//                Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
+//
+//                Interpreter interp = new Interpreter();
+//                interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
+//
+//                System.err.println(test);
+//                System.err.flush();
+//                fail();
+//            } catch (VerificationException e) {
+//                // Expected.
+//            }
+//        }
+//    }
 
     @Test
     public void parseKnownAsm() throws IOException {

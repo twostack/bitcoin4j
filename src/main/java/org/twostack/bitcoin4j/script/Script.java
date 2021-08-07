@@ -84,10 +84,11 @@ public class Script {
         CLEANSTACK, // Require that only a single stack element remains after evaluation.
         CHECKLOCKTIMEVERIFY, // Enable CHECKLOCKTIMEVERIFY operation
         CHECKSEQUENCEVERIFY,
-        ENABLESIGHASHFORKID,
+        SIGHASH_FORKID,
         MONOLITH_OPCODES, // May 15, 2018 Hard fork
         UTXO_AFTER_GENESIS,
         MINIMALIF,
+        NULLFAIL,
         COMPRESSED_PUBKEYTYPE
     }
     public static final EnumSet<VerifyFlag> ALL_VERIFY_FLAGS = EnumSet.allOf(VerifyFlag.class);
@@ -331,6 +332,7 @@ public class Script {
             if (opcode >= 0 && opcode < OP_PUSHDATA1) {
                 // Read some bytes of data, where how many is the opcode value itself.
                 dataToRead = opcode;
+
             } else if (opcode == OP_PUSHDATA1) {
                 if (bis.available() < 1) throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Unexpected end of script");
                 dataToRead = bis.read();
@@ -340,26 +342,32 @@ public class Script {
                 dataToRead = Utils.readUint16FromStream(bis);
             } else if (opcode == OP_PUSHDATA4) {
                 // Read a uint32, then read that many bytes of data.
-                // Though this is allowed, because its value cannot be > 520, it should never actually be used
                 if (bis.available() < 4) throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Unexpected end of script");
                 dataToRead = Utils.readUint32FromStream(bis);
+            }else{
+
             }
 
-            ScriptChunk chunk;
             if (dataToRead == -1) {
-                chunk = new ScriptChunk(opcode, null);
+                chunks.add(new ScriptChunk(opcode, null));
             } else {
                 if (dataToRead > bis.available())
-                    throw new ScriptException(ScriptError.SCRIPT_ERR_BAD_OPCODE, "Push of data element that is larger than remaining data: " + dataToRead + " vs " + bis.available());
-                byte[] data = new byte[(int)dataToRead];
-                checkState(dataToRead == 0 || bis.read(data, 0, (int)dataToRead) == dataToRead);
-                chunk = new ScriptChunk(opcode, data);
+                    throw new ScriptException(ScriptError.SCRIPT_ERR_BAD_OPCODE, "Length of push value is not equal to length of data");
+
+                try {
+
+                    ScriptChunk chunk;
+                    byte[] data = new byte[(int) dataToRead];
+
+                    bis.read(data, 0, (int) dataToRead);
+                    chunk = new ScriptChunk(opcode, data);
+
+                    chunks.add(chunk);
+                }catch(Exception ex){
+                    bis.read();
+                }
             }
             // Save some memory by eliminating redundant copies of the same chunk objects.
-            for (ScriptChunk c : STANDARD_TRANSACTION_SCRIPT_CHUNKS) {
-                if (c.equals(chunk)) chunk = c;
-            }
-            chunks.add(chunk);
         }
     }
 

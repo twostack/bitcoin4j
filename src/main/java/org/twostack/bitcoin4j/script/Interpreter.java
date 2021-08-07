@@ -26,6 +26,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.twostack.bitcoin4j.*;
 import org.twostack.bitcoin4j.exception.ProtocolException;
+import org.twostack.bitcoin4j.exception.PubKeyEncodingException;
+import org.twostack.bitcoin4j.exception.SignatureDecodeException;
+import org.twostack.bitcoin4j.exception.SignatureEncodingException;
 import org.twostack.bitcoin4j.transaction.*;
 
 import javax.annotation.Nullable;
@@ -40,6 +43,7 @@ import java.util.*;
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.twostack.bitcoin4j.script.Script.*;
 import static org.twostack.bitcoin4j.script.ScriptError.SCRIPT_ERR_INVALID_STACK_OPERATION;
+import static org.twostack.bitcoin4j.script.ScriptFlags.*;
 import static org.twostack.bitcoin4j.script.ScriptOpCodes.*;
 
 public class Interpreter {
@@ -238,10 +242,11 @@ public class Interpreter {
                 if (verifyFlags.contains(VerifyFlag.MINIMALDATA) && !chunk.isShortestPossiblePushData())
                     throw new ScriptException(ScriptError.SCRIPT_ERR_MINIMALDATA, "Script included a not minimal push operation.");
 
-                if (opcode == OP_0)
+                if (opcode == OP_0) {
                     stack.add(new byte[]{});
-                else
+                } else {
                     stack.add(chunk.data);
+                }
             } else if (shouldExecute || (OP_IF <= opcode && opcode <= OP_ENDIF)){
 
                 switch (opcode) {
@@ -602,10 +607,6 @@ public class Interpreter {
                             //using the Bytes lib. In-place byte-ops.
                             Bytes shifted = Bytes.wrap(valueToShiftBuf, ByteOrder.BIG_ENDIAN);
 
-                            // bitcoin client implementation of l/rshift is unconventional, therefore this implementation is a bit unconventional
-                            // bn library has shift functions however it expands the carried bits into a  byte
-                            // in contrast to the bitcoin client implementation which drops off the carried bits
-                            // in other words, if operand was 1 byte then we put 1 byte back on the stack instead of expanding to more shifted bytes
                             if (opcode == ScriptOpCodes.OP_LSHIFT) {
                                 //Dart BigInt automagically right-pads the shifted bits
                                 shifted = shifted.leftShift(n);
@@ -931,14 +932,33 @@ public class Interpreter {
 
                         if (txContainingThis == null)
                             throw new IllegalStateException("Script attempted signature check but no tx was provided");
-                        executeCheckSig(txContainingThis, (int) index, script, stack, lastCodeSepLocation, opcode, value, verifyFlags);
+
+                        try {
+                            executeCheckSig(txContainingThis, (int) index, script, stack, lastCodeSepLocation, opcode, value, verifyFlags);
+                        } catch(SignatureEncodingException ex){
+                            stack.add(new byte[] {}); //push false onto stack
+                            throw new ScriptException(ex.getErr(), ex.getMessage());
+                        }catch(PubKeyEncodingException ex){
+                            stack.add(new byte[] {}); //push false onto stack
+                            throw new ScriptException(ex.getErr(), ex.getMessage());
+                        }
+
                         break;
 
                     case OP_CHECKMULTISIG:
                     case OP_CHECKMULTISIGVERIFY:
                         if (txContainingThis == null)
                             throw new IllegalStateException("Script attempted signature check but no tx was provided");
-                        opCount = executeMultiSig(txContainingThis, (int) index, script, stack, opCount, lastCodeSepLocation, opcode, value, verifyFlags);
+                        try {
+                            opCount = executeMultiSig(txContainingThis, (int) index, script, stack, opCount, lastCodeSepLocation, opcode, value, verifyFlags);
+
+                        } catch(SignatureEncodingException ex){
+                            stack.add(new byte[] {}); //push false onto stack
+                            throw new ScriptException(ex.getErr(), ex.getMessage());
+                        }catch(PubKeyEncodingException ex){
+                            stack.add(new byte[] {}); //push false onto stack
+                            throw new ScriptException(ex.getErr(), ex.getMessage());
+                        }
                         break;
 
                     case OP_CHECKLOCKTIMEVERIFY:
@@ -1072,17 +1092,17 @@ public class Interpreter {
         LinkedList<byte[]> stack = new LinkedList<byte[]>();
         LinkedList<byte[]> p2shStack = null;
 
-        //Q: Do we run the scriptSig to prime the stack, then run the scriptIndex ?
         executeScript(transaction, scriptSigIndex, scriptSig,  stack, satoshis, verifyFlags);
-        if (verifyFlags.contains(VerifyFlag.P2SH))
+        if (verifyFlags.contains(VerifyFlag.P2SH) && !(verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS))){
             p2shStack = new LinkedList<byte[]>(stack);
+        }
 
         executeScript(transaction, scriptSigIndex, scriptPubKey, stack, satoshis, verifyFlags);
 
         if (stack.size() == 0)
             throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "Stack empty at end of script execution.");
 
-        if (!castToBool(stack.pollLast()))
+        if (!castToBool(stack.getLast()))
             throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "Script resulted in a non-true stack: " + stack);
 
         // P2SH is pay to script hash. It means that the scriptPubKey has a special form which is a valid
@@ -1098,30 +1118,51 @@ public class Interpreter {
         //     overall scalability and performance.
 
         // TODO: Check if we can take out enforceP2SH if there's a checkpoint at the enforcement block.
-        if (verifyFlags.contains(VerifyFlag.P2SH) && ScriptPattern.isP2SH(scriptPubKey)) {
+        if (verifyFlags.contains(VerifyFlag.P2SH)
+                && ScriptPattern.isP2SH(scriptPubKey)
+                && !(verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS)) ) {
             for (ScriptChunk chunk : scriptSig.getChunks())
                 if (chunk.isOpCode() && chunk.opcode > OP_16)
                     throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_PUSHONLY, "Attempted to spend a P2SH scriptPubKey with a script that contained script ops");
 
-            byte[] scriptPubKeyBytes = p2shStack.pollLast();
+            stack = new LinkedList<>(p2shStack); //restore stack
+            // stack cannot be empty here, because if it was the P2SH  HASH <> EQUAL
+            // scriptPubKey would be evaluated with an empty stack and the
+            // EvalScript above would return false.
+            assert(!stack.isEmpty());
+
+            byte[] scriptPubKeyBytes = stack.pollLast();
             Script scriptPubKeyP2SH = new Script(scriptPubKeyBytes);
 
-            executeScript(transaction, scriptSigIndex, scriptPubKeyP2SH, p2shStack, satoshis, verifyFlags);
+            executeScript(transaction, scriptSigIndex, scriptPubKeyP2SH, stack, satoshis, verifyFlags);
 
-            if (p2shStack.size() == 0)
-                throw new ScriptException(ScriptError.SCRIPT_ERR_CLEANSTACK, "P2SH stack empty at end of script execution.");
+            if (stack.isEmpty())
+                throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "P2SH stack empty at end of script execution.");
 
-            if (!castToBool(p2shStack.pollLast()))
+            if (!castToBool(stack.getLast()))
                 throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "P2SH script execution resulted in a non-true stack");
+        }
+
+        // The CLEANSTACK check is only performed after potential P2SH evaluation,
+        // as the non-P2SH evaluation of a P2SH script will obviously not result in
+        // a clean stack (the P2SH inputs remain). The same holds for witness
+        // evaluation.
+        if (verifyFlags.contains(VerifyFlag.CLEANSTACK)){
+            // Disallow CLEANSTACK without P2SH, as otherwise a switch
+            // CLEANSTACK->P2SH+CLEANSTACK would be possible, which is not a
+            // softfork (and P2SH should be one).
+            assert(verifyFlags.contains(VerifyFlag.P2SH));
+            if (stack.size() != 1){
+                throw new ScriptException(ScriptError.SCRIPT_ERR_CLEANSTACK, "Cleanstack is disallowed without P2SH");
+            }
         }
     }
 
 
     private static void executeCheckSig(Transaction txContainingThis, int index, Script script, LinkedList<byte[]> stack,
                                         int lastCodeSepLocation, int opcode, Coin value,
-                                        Set<VerifyFlag> verifyFlags) throws ScriptException {
+                                        Set<VerifyFlag> verifyFlags) throws ScriptException, SignatureEncodingException, PubKeyEncodingException  {
         final boolean requireCanonical = verifyFlags.contains(VerifyFlag.STRICTENC)
-                || verifyFlags.contains(VerifyFlag.DERSIG)
                 || verifyFlags.contains(VerifyFlag.LOW_S);
         if (stack.size() < 2)
             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKSIG(VERIFY) on a stack with size < 2");
@@ -1141,22 +1182,41 @@ public class Interpreter {
 
         // TODO: Use int for indexes everywhere, we can't have that many inputs/outputs
         boolean sigValid = false;
+
+
+        checkSignatureEncoding(sigBytes, verifyFlags);
+        checkPubKeyEncoding(pubKey, verifyFlags);
+
+        //default to 1 in case of empty Sigs
+        int sigHashType = SigHashType.UNSET.value;
+
+        if (sigBytes.length > 0){
+           sigHashType = sigBytes[sigBytes.length - 1] & 0xFF;
+        }
+
         try {
-            TransactionSignature sig  = TransactionSignature.decodeFromBitcoin(sigBytes, requireCanonical, verifyFlags.contains(VerifyFlag.LOW_S));
+            if (TransactionSignature.hasForkId(sigBytes)) {
+                if (!verifyFlags.contains(VerifyFlag.SIGHASH_FORKID)) {
+                    throw new ScriptException(ScriptError.SCRIPT_ERR_ILLEGAL_FORKID, "ForkID is not enabled, yet the flag is set");
+                }
+            }
+
+            TransactionSignature sig = TransactionSignature.fromTxFormat(sigBytes);
+            Script subScript = new Script(connectedScript);
 
             // TODO: Should check hash type is known
             SigHash sigHash = new SigHash();
 
-            int sighashMode = sig.sigHashMode().value;
-            if (sig.useForkId()) {
-               sighashMode = sig.sigHashMode().value | SigHashType.FORKID.value;
-            }
+//            int sighashMode = sig.sigHashMode().value;
+//            if (sig.useForkId()) {
+//               sighashMode = sig.sigHashMode().value | SigHashType.FORKID.value;
+//            }
 
-            byte[] hash = sigHash.createHash(txContainingThis, sig.sighashFlags, index, new Script(connectedScript), BigInteger.valueOf(value.value)); //FIXME: Use Coin instead ?
-//            Sha256Hash hash = sig.useForkId() ?
-//                    txContainingThis.hashForSignatureWitness(index, connectedScript, value, sig.sigHashMode(), sig.anyoneCanPay()) :
-//                    txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
+            byte[] hash = sigHash.createHash(txContainingThis, sig.sighashFlags, index, subScript, BigInteger.valueOf(value.value));
+            byte[] preimage = sigHash.getSighashPreimage(txContainingThis, sig.sighashFlags, index, subScript, BigInteger.valueOf(value.value));
+            byte[] hash2 = Sha256Hash.hashTwice(preimage);
             sigValid = ECKey.verify(hash, sig, pubKey);
+
         } catch (Exception e1) {
             // There is (at least) one exception that could be hit here (EOFException, if the sig is too short)
             // Because I can't verify there aren't more, we use a very generic Exception catch
@@ -1167,13 +1227,160 @@ public class Interpreter {
                 log.warn("Signature checking failed!", e1);
         }
 
+        if (!sigValid && verifyFlags.contains(VerifyFlag.NULLFAIL) && sigBytes.length > 0 ){
+            throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_NULLFAIL, "Failed strict DER Signature coding. ");
+        }
+
         if (opcode == OP_CHECKSIG)
             stack.add(sigValid ? new byte[] {1} : new byte[] {});
         else if (opcode == OP_CHECKSIGVERIFY)
             if (!sigValid)
                 throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKSIGVERIFY, "Script failed OP_CHECKSIGVERIFY");
     }
+    /**
+     * A canonical signature exists of: <30> <total len> <02> <len R> <R> <02> <len
+     * S> <S> <hashtype>, where R and S are not negative (their first byte has its
+     * highest bit not set), and not excessively padded (do not start with a 0 byte,
+     * unless an otherwise negative number follows, in which case a single 0 byte is
+     * necessary and even required).
+     *
+     * See https://bitcointalk.org/index.php?topic=8392.msg127623#msg127623
+     *
+     * This function is consensus-critical since BIP66.
+     */
+    static boolean isValidSignatureEncoding(byte[] sigBytes) {
+        // Format: 0x30 [total-length] 0x02 [R-length] [R] 0x02 [S-length] [S]
+        // [sighash]
+        // * total-length: 1-byte length descriptor of everything that follows,
+        // excluding the sighash byte.
+        // * R-length: 1-byte length descriptor of the R value that follows.
+        // * R: arbitrary-length big-endian encoded R value. It must use the
+        // shortest possible encoding for a positive integers (which means no null
+        // bytes at the start, except a single one when the next byte has its
+        // highest bit set).
+        // * S-length: 1-byte length descriptor of the S value that follows.
+        // * S: arbitrary-length big-endian encoded S value. The same rules apply.
+        // * sighash: 1-byte value indicating what data is hashed (not part of the
+        // DER signature)
 
+        // Minimum and maximum size constraints.
+        if (sigBytes.length < 9) return false;
+        if (sigBytes.length > 73) return false;
+
+        // A signature is of type 0x30 (compound).
+        if (sigBytes[0] != 0x30) return false;
+
+        // Make sure the length covers the entire signature.
+        if (sigBytes[1] != sigBytes.length - 3) return false;
+
+        // Extract the length of the R element.
+        int lenR = sigBytes[3];
+
+        // Make sure the length of the S element is still inside the signature.
+        if (5 + lenR >= sigBytes.length) return false;
+
+        // Extract the length of the S element.
+        int lenS = sigBytes[5 + lenR];
+
+        // Verify that the length of the signature matches the sum of the length
+        // of the elements.
+        if ((lenR + lenS + 7) != sigBytes.length) return false;
+
+        // Check whether the R element is an integer.
+        if (sigBytes[2] != 0x02) return false;
+
+        // Zero-length integers are not allowed for R.
+        if (lenR == 0) return false;
+
+        // Negative numbers are not allowed for R.
+        if ((sigBytes[4] & 0x80) != 0) return false; //FIXME: Check
+
+        // Null bytes at the start of R are not allowed, unless R would otherwise be
+        // interpreted as a negative number.
+        if (lenR > 1 && (sigBytes[4] == 0x00) && ((sigBytes[5] & 0x80) == 0)) return false; //FIXME: Check
+
+        // Check whether the S element is an integer.
+        if (sigBytes[lenR + 4] != 0x02) return false;
+
+        // Zero-length integers are not allowed for S.
+        if (lenS == 0) return false;
+
+        // Negative numbers are not allowed for S.
+        if ((sigBytes[lenR + 6] & 0x80) != 0) return false;
+
+        // Null bytes at the start of S are not allowed, unless S would otherwise be
+        // interpreted as a negative number.
+        if (lenS > 1 && (sigBytes[lenR + 6] == 0x00) && ((sigBytes[lenR + 7] & 0x80) == 0)) { //FIXME: Check
+            return false;
+        }
+
+        return true;
+    }
+
+
+    ///Comparable to bitcoind's IsLowDERSignature. Returns true if the signature has a 'low' S-value.
+    ///
+    ///See also ECDSA signature algorithm which enforces
+    ///See also BIP 62, 'low S values in signatures'
+    private static boolean hasLowS(byte[] sigBytes) {
+        BigInteger maxVal = new BigInteger("7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0", 16);
+
+        try {
+            ECKey.ECDSASignature sig = ECKey.ECDSASignature.decodeFromDER(sigBytes);
+            if ((sig.s.compareTo( BigInteger.ONE) == -1)  || (sig.s.compareTo(maxVal) == 1)){
+                return false;
+            }
+        }catch(SignatureDecodeException ex){
+            return false;
+        }
+
+        return true;
+    }
+
+    static void checkIsLowDERSignature(byte[] sigBytes) throws ScriptException{
+        if (!isValidSignatureEncoding(sigBytes)) {
+            throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_DER, "Invalid signature encoding");
+        }
+        byte[] sigCopy = Arrays.copyOf(sigBytes, sigBytes.length - 1); //drop Sighash flag
+        if (!hasLowS(sigCopy)) {
+            throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_HIGH_S, "Signature has high S. Low S expected.");
+        }
+    }
+
+    private static void checkSignatureEncoding(byte[] sigBytes, Set<VerifyFlag> flags) throws SignatureEncodingException{
+        // Empty signature. Not strictly DER encoded, but allowed to provide a
+        // compact way to provide an invalid signature for use with CHECK(MULTI)SIG
+        if (sigBytes.length == 0) {
+            return ;
+        }
+        if ((flags.contains (VerifyFlag.DERSIG) | flags.contains(VerifyFlag.LOW_S) |
+                flags.contains(VerifyFlag.STRICTENC)) &&
+                !isValidSignatureEncoding(sigBytes)) {
+            throw new SignatureEncodingException(ScriptError.SCRIPT_ERR_SIG_DER, "Invalid Signature Encoding");
+        }
+        if (flags.contains(VerifyFlag.LOW_S)) {
+            checkIsLowDERSignature(sigBytes);
+        }
+
+        if (flags.contains(VerifyFlag.STRICTENC) ) {
+            int sigHashType = sigBytes[sigBytes.length -1];
+
+
+            boolean usesForkId = (sigHashType & SigHashType.FORKID.value) != 0;
+            boolean forkIdEnabled = flags.contains(VerifyFlag.SIGHASH_FORKID);
+            if (!forkIdEnabled && usesForkId) {
+                throw new SignatureEncodingException(ScriptError.SCRIPT_ERR_ILLEGAL_FORKID, "ForkID is not enabled, yet the flag is set");
+            }
+            if (forkIdEnabled && !usesForkId) {
+                throw new SignatureEncodingException(ScriptError.SCRIPT_ERR_MUST_USE_FORKID, "ForkID flag is required");
+            }
+
+            //check for valid sighashType
+            if (!SigHashType.hasValue(sigHashType)) {
+                throw new SignatureEncodingException(ScriptError.SCRIPT_ERR_SIG_HASHTYPE, "Invalid Sighash type");
+            }
+        }
+    }
 
     private static boolean isCanonicalPubkey(byte[] pubkey) {
         if (pubkey.length < 33) {
@@ -1211,14 +1418,14 @@ public class Interpreter {
 
 
 
-    private static boolean checkPubKeyEncoding(byte[] pubKey, Set<VerifyFlag> flags) throws ScriptException{
+    private static boolean checkPubKeyEncoding(byte[] pubKey, Set<VerifyFlag> flags) throws PubKeyEncodingException{
 
        if (flags.contains(VerifyFlag.STRICTENC) && !isCanonicalPubkey(pubKey)) {
-           throw new ScriptException(ScriptError.SCRIPT_ERR_PUBKEYTYPE, "Public key has invalid encoding");
+           throw new PubKeyEncodingException(ScriptError.SCRIPT_ERR_PUBKEYTYPE, "Public key has invalid encoding");
        }
 
        if (flags.contains(VerifyFlag.COMPRESSED_PUBKEYTYPE) && !isCompressedPubKey(pubKey)){
-           throw new ScriptException(ScriptError.SCRIPT_ERR_NONCOMPRESSED_PUBKEY, "Public key has invalid encoding");
+           throw new PubKeyEncodingException(ScriptError.SCRIPT_ERR_NONCOMPRESSED_PUBKEY, "Public key has invalid encoding");
        }
 
        return true;
@@ -1227,7 +1434,7 @@ public class Interpreter {
 
     private static int executeMultiSig(Transaction txContainingThis, int index, Script script, LinkedList<byte[]> stack,
                                        int opCount, int lastCodeSepLocation, int opcode, Coin value,
-                                       Set<VerifyFlag> verifyFlags) throws ScriptException {
+                                       Set<VerifyFlag> verifyFlags) throws ScriptException, PubKeyEncodingException, SignatureEncodingException {
         final boolean requireCanonical = verifyFlags.contains(VerifyFlag.STRICTENC)
                 || verifyFlags.contains(VerifyFlag.DERSIG)
                 || verifyFlags.contains(VerifyFlag.LOW_S);
@@ -1246,6 +1453,7 @@ public class Interpreter {
         if (stack.size() < pubKeyCount + 1)
             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < num_of_pubkeys + 2");
 
+        //take all pubkeys off the stack
         LinkedList<byte[]> pubkeys = new LinkedList<byte[]>();
         for (int i = 0; i < pubKeyCount; i++) {
             byte[] pubKey = stack.pollLast();
@@ -1258,6 +1466,7 @@ public class Interpreter {
         if (stack.size() < sigCount + 1)
             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < num_of_pubkeys + num_of_signatures + 3");
 
+        //take all signatures off the stack
         LinkedList<byte[]> sigs = new LinkedList<byte[]>();
         for (int i = 0; i < sigCount; i++) {
             byte[] sig = stack.pollLast();
@@ -1277,50 +1486,92 @@ public class Interpreter {
             connectedScript = removeAllInstancesOf(connectedScript, outStream.toByteArray());
         }
 
+
+        // ikey2 is the position of last non-signature item in
+        // the stack. Top stack item = 1. With
+        // SCRIPT_VERIFY_NULLFAIL, this is used for cleanup if
+        // operation fails.
+        int ikey2 = pubKeyCount + 2;
+
         boolean valid = true;
-        while (sigs.size() > 0) {
+
+        while (valid && sigs.size() > 0) {
             byte[] pubKey = pubkeys.pollFirst();
+            byte[] sigBytes = sigs.getFirst();
             // We could reasonably move this out of the loop, but because signature verification is significantly
             // more expensive than hashing, its not a big deal.
 
-            //FIXME: Check Signature Encoding
+             checkSignatureEncoding(sigBytes, verifyFlags);
+             checkPubKeyEncoding(pubKey, verifyFlags);
 
-            //CHECK Pubkey Encoding
-            checkPubKeyEncoding(pubKey, verifyFlags);
+
+            //default to 1 in case of empty Sigs
+            int sigHashType = SigHashType.UNSET.value;
+
+            if (sigBytes.length > 0){
+                sigHashType = sigBytes[sigBytes.length - 1];
+            }
+
 
             try {
 
+                TransactionSignature sig = TransactionSignature.fromTxFormat(sigBytes);
+                Script subScript = new Script(connectedScript);
 
-                TransactionSignature sig = TransactionSignature.decodeFromBitcoin(sigs.getFirst(), requireCanonical, verifyFlags.contains(VerifyFlag.LOW_S));
-
+                // TODO: Should check hash type is known
                 SigHash sigHash = new SigHash();
 
-                int sighashMode = sig.sigHashMode().value;
+                int sighashMode = sig.sighashFlags;
                 if (sig.useForkId()) {
-                    sighashMode = sig.sigHashMode().value | SigHashType.FORKID.value;
+                    sighashMode = sig.sighashFlags | SigHashType.FORKID.value;
                 }
 
-                byte[] hash = sigHash.createHash(txContainingThis, sighashMode, index, new Script(connectedScript), BigInteger.valueOf(value.value)); //FIXME: Use Coin instead ?
-//                Sha256Hash hash = sig.useForkId() ?
-//                        txContainingThis.hashForSignatureWitness(index, connectedScript, value, sig.sigHashMode(), sig.anyoneCanPay()):
-//                        txContainingThis.hashForSignature(index, connectedScript, (byte) sig.sighashFlags);
-                if (ECKey.verify(hash, sig, pubKey))
-                    sigs.pollFirst();
+                byte[] hash = sigHash.createHash(txContainingThis, sighashMode, index, subScript, BigInteger.valueOf(value.value)); //FIXME: Use Coin instead ?
+                if (ECKey.verify(hash, sigBytes, pubKey)) {
+                    sigs.pollFirst(); //pop a successfully validated sig
+                }
+
+                pubKeyCount--;
+
             } catch (Exception e) {
                 // There is (at least) one exception that could be hit here (EOFException, if the sig is too short)
                 // Because I can't verify there aren't more, we use a very generic Exception catch
             }
 
+            // If there are more signatures left than keys left,
+            // then too many signatures have failed. Exit early,
+            // without checking any further signatures.
             if (sigs.size() > pubkeys.size()) {
                 valid = false;
-                break;
             }
         }
 
-        // We uselessly remove a stack object to emulate a Bitcoin Core bug.
+        // If the operation failed, we require that all
+        // signatures must be empty vector
+        while (sigs.size() > 0) {
+
+            if (!valid && verifyFlags.contains(VerifyFlag.NULLFAIL) && sigs.getLast().length > 0) {
+                throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_NULLFAIL, "Failed strict DER Signature coding. ");
+            }
+
+            sigs.pollLast();
+        }
+
+        // A bug causes CHECKMULTISIG to consume one extra
+        // argument whose contents were not checked in any way.
+        //
+        // Unfortunately this is a potential source of
+        // mutability, so optionally verify it is exactly equal
+        // to zero prior to removing it from the stack.
+        if (stack.size() < 1){
+           throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "No dummy element left on stack to compensate for Core bug");
+        }
+
+        //pop the dummy element (core bug argument)
         byte[] nullDummy = stack.pollLast();
         if (verifyFlags.contains(VerifyFlag.NULLDUMMY) && nullDummy.length > 0)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "OP_CHECKMULTISIG(VERIFY) with non-null nulldummy: " + Arrays.toString(nullDummy));
+            throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_NULLDUMMY, "OP_CHECKMULTISIG(VERIFY) with non-null nulldummy: " + Arrays.toString(nullDummy));
+
 
         if (opcode == OP_CHECKMULTISIG) {
             stack.add(valid ? new byte[] {1} : new byte[] {});

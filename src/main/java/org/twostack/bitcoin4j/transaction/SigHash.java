@@ -16,6 +16,7 @@
  */
 package org.twostack.bitcoin4j.transaction;
 
+import at.favre.lib.bytes.Bytes;
 import org.twostack.bitcoin4j.*;
 import org.twostack.bitcoin4j.exception.SigHashException;
 import org.twostack.bitcoin4j.script.Script;
@@ -27,6 +28,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
 

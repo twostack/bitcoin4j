@@ -45,6 +45,7 @@ import java.util.*;
 import static org.junit.Assert.*;
 import static org.twostack.bitcoin4j.Utils.HEX;
 import static org.twostack.bitcoin4j.utils.TestUtil.parseScriptString;
+import static org.twostack.bitcoin4j.utils.TestUtil.parseVerifyFlags;
 
 /**
  * Just check the Transaction.verify() method. Most methods that have complicated logic in Transaction are tested
@@ -216,12 +217,22 @@ public class TransactionTest {
     }
 
 
+//    @Test
+//    public void svNodeValidTestVectors() throws Exception {
+//        dataDrivenValidTransactions("tx_valid_svnode.json");
+//    }
+
+    @Test
+    public void bsvJsValidTestVectors() throws Exception {
+        dataDrivenValidTransactions("tx_valid.json");
+    }
+
+
     /*
     Tests that the provided test vectors provide valid spending transactions for the corresponding UTXOs
      */
-    @Test
-    public void dataDrivenValidTransactions() throws Exception {
-        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream("tx_valid.json"), StandardCharsets.UTF_8));
+    public void dataDrivenValidTransactions(String filename) throws Exception {
+        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(filename), StandardCharsets.UTF_8));
         for (JsonNode test : json) {
             if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
                 continue; // This is a comment.
@@ -262,11 +273,18 @@ public class TransactionTest {
         }
     }
 
+//    @Test
+//    public void svNodeInValidTestVectors() throws Exception {
+//        dataDrivenInvalidTransactions("tx_invalid_svnode.json");
+//    }
 
     @Test
-    public void dataDrivenInvalidTransactions() throws Exception {
-        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
-                "tx_invalid.json"), Charsets.UTF_8));
+    public void bsvJsInValidTestVectors() throws Exception {
+        dataDrivenInvalidTransactions("tx_invalid.json");
+    }
+
+    public void dataDrivenInvalidTransactions(String filename) throws Exception {
+        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream( filename), Charsets.UTF_8));
         for (JsonNode test : json) {
             if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
                 continue;
@@ -318,19 +336,6 @@ public class TransactionTest {
     }
 
 
-    private Set<Script.VerifyFlag> parseVerifyFlags(String str) {
-        Set<Script.VerifyFlag> flags = EnumSet.noneOf(Script.VerifyFlag.class);
-        if (!"NONE".equals(str)) {
-            for (String flag : str.split(",")) {
-                try {
-                    flags.add(Script.VerifyFlag.valueOf(flag));
-                } catch (IllegalArgumentException x) {
-                    log.debug("Cannot handle verify flag {} -- ignored.", flag);
-                }
-            }
-        }
-        return flags;
-    }
 
     private Map<String, Script> parseScriptPubKeys(JsonNode inputs) throws IOException {
         Map<String, Script> scriptPubKeys = new HashMap<String, Script>();
