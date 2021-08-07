@@ -20,6 +20,7 @@
 
 package org.twostack.bitcoin4j.script;
 
+import at.favre.lib.bytes.Bytes;
 import org.bouncycastle.crypto.digests.RIPEMD160Digest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +32,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
@@ -578,7 +580,51 @@ public class Interpreter {
 
                     case OP_LSHIFT:
                     case OP_RSHIFT:
-                        throw new ScriptException(ScriptError.SCRIPT_ERR_DISABLED_OPCODE, "LSHIFT and RSHIFT are pending implementation");
+
+                        if (stack.size() < 2)
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Too few items on stack for SHIFT Op");
+
+                        byte[] shiftCountBuf = stack.getLast();
+                        byte[] valueToShiftBuf = stack.get(stack.size() - 2);
+
+                        if (valueToShiftBuf.length == 0) {
+                            stack.pop();
+                        } else {
+                            final BigInteger shiftCount = castToBigInteger(shiftCountBuf, 5, verifyFlags.contains(VerifyFlag.MINIMALDATA));
+
+                            int n = shiftCount.intValue();
+                            if (n < 0)
+                                throw new ScriptException(ScriptError.SCRIPT_ERR_INVALID_NUMBER_RANGE, "Can't shift negative number of bits (n < 0)");
+
+                            stack.pop();
+                            stack.pop();
+
+                            //using the Bytes lib. In-place byte-ops.
+                            Bytes shifted = Bytes.wrap(valueToShiftBuf, ByteOrder.BIG_ENDIAN);
+
+                            // bitcoin client implementation of l/rshift is unconventional, therefore this implementation is a bit unconventional
+                            // bn library has shift functions however it expands the carried bits into a  byte
+                            // in contrast to the bitcoin client implementation which drops off the carried bits
+                            // in other words, if operand was 1 byte then we put 1 byte back on the stack instead of expanding to more shifted bytes
+                            if (opcode == ScriptOpCodes.OP_LSHIFT) {
+                                //Dart BigInt automagically right-pads the shifted bits
+                                shifted = shifted.leftShift(n);
+                            }
+                            if (opcode == ScriptOpCodes.OP_RSHIFT) {
+                                shifted = shifted.rightShift(n);
+                            }
+
+                            if (n > 0){
+                                //shift occured
+                                stack.push(shifted.array());
+
+                            }else{
+                                //no shift, just push original value back onto stack
+                                stack.push(valueToShiftBuf);
+                            }
+
+                        }
+                        break;
                     case OP_INVERT: {
                         if (stack.size() < 1) {
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "No elements left on stack.");
