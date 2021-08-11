@@ -1,3 +1,42 @@
+* Release 1.5.0
+*** New Features
+In February 2020 the BSV network underwent a hardfork known as the "Genesis Upgrade".
+https://wiki.bitcoinsv.io/index.php/Genesis_upgrade
+
+This release brings this library in line with the latest features from the Genesis upgrade.
+
+- Genesis OpCode support in Script Interpreter (a number of OpCodes were re-enabled)
+- New default limits on Script OpCodes (number of opcodes in script, size of script etc.)
+- Expanded numeric support to cover BigIntegers in Script
+- P2SH nuances w.r.t. simultaneous "soft-deprecation" of this feature.
+- Backward-compatibility with pre-fork transactions (limits remaining in place)
+- Full compatibility with BitcoinSV Node 1.0.8 Test Vectors
+
+*** Notable Limits
+
+Below are some notable constants delimiting new limits available to Script developers. 
+These limits are all governed by Flags that can be passed to the Script Interpreter. 
+```
+//maximum size of push operation after Genesis
+MAX_SCRIPT_ELEMENT_SIZE = 2147483647;  // 2Gigabytes after Genesis - (2^31 -1)
+
+//maximum size of push operation before Genesis
+MAX_SCRIPT_ELEMENT_SIZE_BEFORE_GENESIS = 520;
+
+// Maximum number of non-push operations per script before GENESIS
+MAX_OPS_PER_SCRIPT_BEFORE_GENESIS = 500;
+
+// Maximum number of non-push operations per script after GENESIS
+MAX_OPS_PER_SCRIPT_AFTER_GENESIS = UINT32_MAX // (4294967295L)
+
+// Maximum script number length after Genesis
+MAX_SCRIPT_NUM_LENGTH_AFTER_GENESIS = 750 * ONE_KILOBYTE;
+
+//maximum size of numbers in Script before Genesis
+MAX_SCRIPT_NUM_LENGTH_BEFORE_GENESIS = 4;
+
+```
+
 
 * Release 1.4.1
 *** New Features

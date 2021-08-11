@@ -29,7 +29,7 @@ implementation("org.twostack:bitcoin4j:1.4.1")
 <dependency>
   <groupId>org.twostack</groupId>
   <artifactId>bitcoin4j</artifactId>
-  <version>1.4.1</version>
+  <version>1.5.0</version>
 </dependency>
 ```
 
