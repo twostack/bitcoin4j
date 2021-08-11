@@ -236,7 +236,7 @@ public class ScriptTest {
             try {
                 Script scriptSig = parseScriptString(test.get(offset + 0).asText());
                 Script scriptPubKey = parseScriptString(test.get(offset + 1).asText());
-                Transaction txCredit = buildCreditingTransaction(scriptPubKey, BigInteger.valueOf(Coin.parseCoin(nValue).longValue()));
+                Transaction txCredit = buildCreditingTransaction(scriptPubKey,BigInteger.ZERO);
                 Transaction txSpend = buildSpendingTransaction(txCredit, scriptSig);
 
                 Interpreter interp = new Interpreter();
