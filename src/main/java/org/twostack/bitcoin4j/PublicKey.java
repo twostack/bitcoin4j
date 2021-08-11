@@ -18,7 +18,8 @@ package org.twostack.bitcoin4j;
 
 public class PublicKey {
 
-    ECKey key;
+
+    private ECKey key;
 
     //FIXME: hide the constructor for now to force factory method usage
     private PublicKey(ECKey key){
@@ -45,5 +46,9 @@ public class PublicKey {
 
     public String getPubKeyHex(){
         return key.getPublicKeyAsHex();
+    }
+
+    public ECKey getKey() {
+        return key;
     }
 }

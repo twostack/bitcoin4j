@@ -18,26 +18,32 @@
 
 package org.twostack.bitcoin4j.script;
 
+import at.favre.lib.bytes.Bytes;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Charsets;
-import org.assertj.core.api.Assertions;
+import org.twostack.bitcoin4j.Coin;
+import org.twostack.bitcoin4j.Utils;
+import org.twostack.bitcoin4j.exception.TransactionException;
 import org.twostack.bitcoin4j.exception.VerificationException;
 import org.twostack.bitcoin4j.script.Script.VerifyFlag;
 import org.junit.Before;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.twostack.bitcoin4j.transaction.Transaction;
+import org.twostack.bitcoin4j.transaction.*;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.ByteBuffer;
+import java.math.BigInteger;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static org.twostack.bitcoin4j.Utils.HEX;
 import static org.junit.Assert.*;
 import static org.twostack.bitcoin4j.utils.TestUtil.parseScriptString;
+import static org.twostack.bitcoin4j.utils.TestUtil.parseVerifyFlags;
 
 public class ScriptTest {
     // From tx 05e04c26c12fe408a3c1b71aa7996403f6acad1045252b1c62e055496f4d2cb1 on the testnet.
@@ -93,16 +99,16 @@ public class ScriptTest {
     @Test
     public void should_parse_these_known_scripts() throws IOException {
 
-        String parsed = Script.fromAsmString("OP_0 OP_PUSHDATA4 3 0x010203 OP_0").toAsmString();
+        String parsed = Script.fromBitcoindString("OP_0 OP_PUSHDATA4 3 0x010203 OP_0").toBitcoindString();
         assertEquals("OP_0 OP_PUSHDATA4 3 0x010203 OP_0", parsed);
 
-        String parsed2 = Script.fromAsmString("OP_0 OP_PUSHDATA2 3 0x010203 OP_0").toAsmString();
+        String parsed2 = Script.fromBitcoindString("OP_0 OP_PUSHDATA2 3 0x010203 OP_0").toBitcoindString();
         assertEquals("OP_0 OP_PUSHDATA2 3 0x010203 OP_0", parsed2);
 
-        String parsed3 = Script.fromAsmString("OP_0 OP_PUSHDATA1 3 0x010203 OP_0").toAsmString();
+        String parsed3 = Script.fromBitcoindString("OP_0 OP_PUSHDATA1 3 0x010203 OP_0").toBitcoindString();
         assertEquals("OP_0 OP_PUSHDATA1 3 0x010203 OP_0", parsed3);
 
-        String parsed4 = Script.fromAsmString("OP_0 3 0x010203 OP_0").toAsmString();
+        String parsed4 = Script.fromBitcoindString("OP_0 3 0x010203 OP_0").toBitcoindString();
         assertEquals("OP_0 3 0x010203 OP_0", parsed4);
     }
 
@@ -111,9 +117,9 @@ public class ScriptTest {
     public void can_roundtrip_serializing_of_a_script() throws IOException {
 
         final String str = "OP_0 OP_RETURN 34 0x31346b7871597633656d48477766386d36596753594c516b4743766e395172677239 66 0x303236336661663734633031356630376532633834343538623566333035653262323762366566303838393238383133326435343264633139633436663064663532 OP_PUSHDATA1 150 0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";
-        final Script script = Script.fromAsmString(str);
+        final Script script = Script.fromBitcoindString(str);
 
-        assertEquals(str, script.toAsmString());
+        assertEquals(str, script.toBitcoindString());
     }
 
     /// fromByteArray constructor tests
@@ -137,7 +143,7 @@ public class ScriptTest {
     @Test
     public void should_parse_this_asm_script() throws IOException {
         String asm = "OP_DUP OP_HASH160 20 0xf4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG";
-        Script script = Script.fromAsmString(asm);
+        Script script = Script.fromBitcoindString(asm);
 
         assertEquals(script.chunks.get(0).opcode, ScriptOpCodes.OP_DUP);
         assertEquals(script.chunks.get(1).opcode, ScriptOpCodes.OP_HASH160);
@@ -151,83 +157,154 @@ public class ScriptTest {
     @Test
     public void should_parse_this_second_asm_script() throws IOException {
         String asm = "OP_RETURN 3 0x026d02 6 0x0568656c6c6f";
-        Script script = Script.fromAsmString(asm);
+        Script script = Script.fromBitcoindString(asm);
 
-        assertEquals(script.toAsmString(), asm);
+        assertEquals(script.toBitcoindString(), asm);
     }
 
     @Test
     public void should_fail_on_invalid_hex(){
         String asm = "OP_RETURN 3 0x026d02 7 0x0568656c6c6fzz";
 
-        assertThrows(ScriptException.class, () -> Script.fromAsmString(asm));
+        assertThrows(ScriptException.class, () -> Script.fromBitcoindString(asm));
     }
 
+    private Transaction buildCreditingTransaction(Script scriptPubKey, BigInteger nValue) throws TransactionException {
 
-    private Set<VerifyFlag> parseVerifyFlags(String str) {
-        Set<VerifyFlag> flags = EnumSet.noneOf(VerifyFlag.class);
-        if (!"NONE".equals(str)) {
-            for (String flag : str.split(",")) {
-                try {
-                    flags.add(VerifyFlag.valueOf(flag));
-                } catch (IllegalArgumentException x) {
-                    log.debug("Cannot handle verify flag {} -- ignored.", flag);
+        Transaction credTx = new Transaction();
+        Script unlockingScript = new ScriptBuilder().number(0).number(0).build();
+        DefaultUnlockBuilder coinbaseUnlockBuilder = new DefaultUnlockBuilder(unlockingScript);
+        byte[] prevTxnId = new byte[32];
+        TransactionInput coinbaseInput = new TransactionInput(
+                prevTxnId,
+                0xffffffff,
+                TransactionInput.MAX_SEQ_NUMBER,
+                coinbaseUnlockBuilder
+        );
+        credTx.addInput(coinbaseInput);
+
+        LockingScriptBuilder lockingScriptBuilder = new DefaultLockBuilder(scriptPubKey);
+        TransactionOutput output = new TransactionOutput(nValue, lockingScriptBuilder);
+
+        credTx.addOutput(output);
+
+        return credTx;
+
+
+    }
+
+    private Transaction buildSpendingTransaction(Transaction creditingTransaction, Script scriptSig) {
+
+        Transaction spendingTx = new Transaction();
+
+        UnlockingScriptBuilder unlockingScriptBuilder = new DefaultUnlockBuilder(scriptSig);
+
+        TransactionInput input = new TransactionInput(
+                Utils.reverseBytes(creditingTransaction.getTransactionIdBytes()),
+                0,
+                TransactionInput.MAX_SEQ_NUMBER,
+                unlockingScriptBuilder
+        );
+        spendingTx.addInput(input);
+
+        LockingScriptBuilder lockingScriptBuilder = new DefaultLockBuilder(new ScriptBuilder().build());
+        TransactionOutput output = new TransactionOutput(BigInteger.ZERO, lockingScriptBuilder);
+        spendingTx.addOutput(output);
+
+        return spendingTx;
+
+    }
+    @Test
+    public void dataDrivenScripts() throws Exception {
+        JsonNode json = new ObjectMapper()
+                .readTree(new InputStreamReader(getClass().getResourceAsStream("script_tests_svnode.json"), StandardCharsets.UTF_8));
+        for (JsonNode test : json) {
+            if (test.size() == 1)
+                continue; // skip comment
+
+            String nValue = "0";
+            int offset = 0;
+            if (test.size() == 6 && test.get(0).isArray()){
+                //grab the satoshi value from first array
+                nValue = test.get(0).get(0).asText();
+                offset = 1;
+            }
+
+            Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(offset + 2).asText());
+            ScriptError expectedError = ScriptError.fromMnemonic(test.get(offset + 3).asText());
+            System.out.println(test.get(offset + 1).asText());
+            try {
+                Script scriptSig = parseScriptString(test.get(offset + 0).asText());
+                Script scriptPubKey = parseScriptString(test.get(offset + 1).asText());
+                Transaction txCredit = buildCreditingTransaction(scriptPubKey,BigInteger.ZERO);
+                Transaction txSpend = buildSpendingTransaction(txCredit, scriptSig);
+
+                Interpreter interp = new Interpreter();
+                interp.correctlySpends(scriptSig, scriptPubKey, txSpend, 0,  verifyFlags);
+                if (!expectedError.equals(ScriptError.SCRIPT_ERR_OK))
+                    fail(test + " is expected to fail");
+            } catch (ScriptException e) {
+                if (!e.getError().equals(expectedError)) {
+                    System.err.println(test);
+                    e.printStackTrace();
+                    System.err.flush();
+                    throw e;
                 }
             }
         }
-        return flags;
     }
 
 
 
 
-    @Test
-    public void dataDrivenValidScripts() throws Exception {
-        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
-                "script_valid.json"), Charsets.UTF_8));
-        for (JsonNode test : json) {
-            Script scriptSig = parseScriptString(test.get(0).asText());
-            Script scriptPubKey = parseScriptString(test.get(1).asText());
-            Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-            try {
-
-
-                Interpreter interp = new Interpreter();
-                interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
-
-            } catch (ScriptException e) {
-                System.err.println(test);
-                System.err.flush();
-                throw e;
-            }
-        }
-    }
-
-    @Test
-    public void dataDrivenInvalidScripts() throws Exception {
-        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
-                "script_invalid.json"), Charsets.UTF_8));
-        for (JsonNode test : json) {
-            try {
-                Script scriptSig = parseScriptString(test.get(0).asText());
-                Script scriptPubKey = parseScriptString(test.get(1).asText());
-                Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
-
-                Interpreter interp = new Interpreter();
-                interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
-
-                System.err.println(test);
-                System.err.flush();
-                fail();
-            } catch (VerificationException e) {
-                // Expected.
-            }
-        }
-    }
+//    @Test
+//    public void dataDrivenValidScripts() throws Exception {
+//        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
+//                "script_valid.json"), Charsets.UTF_8));
+//        for (JsonNode test : json) {
+//            Script scriptSig = parseScriptString(test.get(0).asText());
+//            Script scriptPubKey = parseScriptString(test.get(1).asText());
+//            Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
+//            try {
+//
+//
+//                Interpreter interp = new Interpreter();
+//                interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
+//
+//            } catch (ScriptException e) {
+//                System.err.println(test);
+//                System.err.flush();
+//                throw e;
+//            }
+//        }
+//    }
+//
+//
+//    @Test
+//    public void dataDrivenInvalidScripts() throws Exception {
+//        JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(
+//                "script_invalid.json"), Charsets.UTF_8));
+//        for (JsonNode test : json) {
+//            try {
+//                Script scriptSig = parseScriptString(test.get(0).asText());
+//                Script scriptPubKey = parseScriptString(test.get(1).asText());
+//                Set<VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
+//
+//                Interpreter interp = new Interpreter();
+//                interp.correctlySpends( scriptSig, scriptPubKey, new Transaction(), 0 , verifyFlags);
+//
+//                System.err.println(test);
+//                System.err.flush();
+//                fail();
+//            } catch (VerificationException e) {
+//                // Expected.
+//            }
+//        }
+//    }
 
     @Test
     public void parseKnownAsm() throws IOException {
-        String asm = "OP_DUP OP_HASH160 20 0xf4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG";
+        String asm = "OP_DUP OP_HASH160 f4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG";
         Script script = Script.fromAsmString(asm);
         assertEquals(ScriptOpCodes.OP_DUP, script.getChunks().get(0).opcode);
         assertEquals(ScriptOpCodes.OP_HASH160, script.getChunks().get(1).opcode);
@@ -240,14 +317,14 @@ public class ScriptTest {
     @Test
     public void parseKnownProblematic() {
         String asm = "OP_RETURN 3 0x026d02 6 0x0568656c6c6f";
-        Script script = Script.fromAsmString(asm);
-        assertEquals(asm, script.toAsmString());
+        Script script = Script.fromBitcoindString(asm);
+        assertEquals(asm, script.toBitcoindString());
     }
 
     @Test
     public void failsOnInvalidHex(){
         String asm = "OP_RETURN 026d02 0568656c6c6fzz";
-        assertThrows(ScriptException.class, () -> Script.fromAsmString(asm));
+        assertThrows(ScriptException.class, () -> Script.fromBitcoindString(asm));
     }
 
     @Test
@@ -255,18 +332,18 @@ public class ScriptTest {
 
         byte[] buf = new byte[220];
         String asm = "OP_0 OP_RETURN OP_PUSHDATA1 220 0x" + HEX.encode(buf);
-        Script script = Script.fromAsmString(asm);
+        Script script = Script.fromBitcoindString(asm);
         assertEquals(ScriptOpCodes.OP_PUSHDATA1, script.getChunks().get(2).opcode);
-        assertEquals(asm, script.toAsmString());
+        assertEquals(asm, script.toBitcoindString());
     }
 
     @Test
     public void shouldParseLongPushData2(){
         byte[] buf = new byte[1024];
         String asm = "OP_0 OP_RETURN OP_PUSHDATA2 1024 0x" + HEX.encode(buf);
-        Script script = Script.fromAsmString(asm);
+        Script script = Script.fromBitcoindString(asm);
         assertEquals(ScriptOpCodes.OP_PUSHDATA2, script.getChunks().get(2).opcode);
-        assertEquals(asm, script.toAsmString());
+        assertEquals(asm, script.toBitcoindString());
     }
 
     @Test
@@ -274,15 +351,15 @@ public class ScriptTest {
         int doubleSize = Double.valueOf(Math.pow(2, 17)).intValue();
         byte[] buf = new byte[doubleSize];
         String asm = "OP_0 OP_RETURN OP_PUSHDATA4 " + doubleSize + " 0x" + HEX.encode(buf);
-        Script script = Script.fromAsmString(asm);
+        Script script = Script.fromBitcoindString(asm);
         assertEquals(ScriptOpCodes.OP_PUSHDATA4, script.getChunks().get(2).opcode);
-        assertEquals(asm, script.toAsmString());
+        assertEquals(asm, script.toBitcoindString());
     }
 
     @Test
     public void shouldRenderP2PKH() {
         Script script = new Script(HEX.decode("76a914f4c03610e60ad15100929cc23da2f3a799af172588ac"));
-        assertEquals("OP_DUP OP_HASH160 20 0xf4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG",  script.toAsmString());
+        assertEquals("OP_DUP OP_HASH160 20 0xf4c03610e60ad15100929cc23da2f3a799af1725 OP_EQUALVERIFY OP_CHECKSIG",  script.toBitcoindString());
     }
 
 

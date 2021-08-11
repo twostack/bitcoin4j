@@ -1,8 +1,6 @@
 package org.twostack.bitcoin4j.transaction;
 
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import org.assertj.core.api.Assertions;
-import org.bouncycastle.util.encoders.Hex;
 import org.junit.Test;
 import org.twostack.bitcoin4j.Address;
 import org.twostack.bitcoin4j.PrivateKey;
@@ -77,7 +75,7 @@ public class LockUnlockBuilderTests {
         //roundtrip it
         String scriptString = "24 0x02000000016b748661a108dc35d8868a9a552b9364c6ee3f OP_DROP OP_DUP OP_HASH160 20 0x2279837529828be4ae0110939ddbb8c15821cf50 OP_EQUALVERIFY OP_CHECKSIG";
 
-        Script lockingScript = Script.fromAsmString(scriptString);
+        Script lockingScript = Script.fromBitcoindString(scriptString);
         P2PKHDataLockBuilder lockBuilder2 = new P2PKHDataLockBuilder(lockingScript);
 
         assertEquals(Utils.HEX.encode(lockBuilder2.getDataBuffer().array()), "02000000016b748661a108dc35d8868a9a552b9364c6ee3f");
@@ -92,7 +90,7 @@ public class LockUnlockBuilderTests {
 
         List<ScriptChunk> chunks = script.getChunks();
 
-        System.out.println(script.toAsmString());
+        System.out.println(script.toBitcoindString());
         assertEquals(7, chunks.size());
         assertEquals(ScriptOpCodes.OP_DROP, chunks.get(1).opcode);
         assertEquals(ScriptOpCodes.OP_DUP, chunks.get(2).opcode);
@@ -103,7 +101,7 @@ public class LockUnlockBuilderTests {
         //roundtrip it
         String scriptString = "OP_PUSHDATA1 191 0x02000000016b748661a108dc35d8868a9a552b9364c6ee3f06a4604f722882d49cdc4d13020000000048473044022073062451397fb5e7e2e02f1603e2a92677d516a5e747b1ae2ad0996387916d4302200ae2ec97d4525621cef07f75f0b92b5e83341761fa604c83daf0390a76d5024241feffffff0200e1f505000000001976a91494837d2d5d6106aa97db38957dcc294181ee91e988ac00021024010000001976a9144d991c88b4fd954ea62aa7182d3b3e251896a83188acd5000000 OP_DROP OP_DUP OP_HASH160 20 0x2279837529828be4ae0110939ddbb8c15821cf50 OP_EQUALVERIFY OP_CHECKSIG";
 
-        Script lockingScript = Script.fromAsmString(scriptString);
+        Script lockingScript = Script.fromBitcoindString(scriptString);
         P2PKHDataLockBuilder lockBuilder2 = new P2PKHDataLockBuilder(lockingScript);
 
         assertEquals(Utils.HEX.encode(lockBuilder2.getDataBuffer().array()), "02000000016b748661a108dc35d8868a9a552b9364c6ee3f06a4604f722882d49cdc4d13020000000048473044022073062451397fb5e7e2e02f1603e2a92677d516a5e747b1ae2ad0996387916d4302200ae2ec97d4525621cef07f75f0b92b5e83341761fa604c83daf0390a76d5024241feffffff0200e1f505000000001976a91494837d2d5d6106aa97db38957dcc294181ee91e988ac00021024010000001976a9144d991c88b4fd954ea62aa7182d3b3e251896a83188acd5000000");
@@ -126,14 +124,14 @@ public class LockUnlockBuilderTests {
 
     @Test
     public void failsOnOldStyleOpReturn() throws IOException {
-        Script returnScript = Script.fromAsmString("OP_RETURN");
+        Script returnScript = Script.fromBitcoindString("OP_RETURN");
         assertThrows(ScriptException.class, () -> new UnspendableDataLockBuilder(returnScript));
 
     }
 
     @Test
     public void canCreateNewStyleOpReturn() throws IOException {
-        Script returnScript = Script.fromAsmString("OP_0 OP_RETURN");
+        Script returnScript = Script.fromBitcoindString("OP_0 OP_RETURN");
         Assertions.assertThatCode(() -> new UnspendableDataLockBuilder(returnScript)).doesNotThrowAnyException();
     }
 
@@ -146,7 +144,7 @@ public class LockUnlockBuilderTests {
 
         LockingScriptBuilder lockBuilder = new UnspendableDataLockBuilder(dataList);
 
-        assertEquals("OP_0 OP_RETURN 9 0xbacacafe0102030405", lockBuilder.getLockingScript().toAsmString());
+        assertEquals("OP_0 OP_RETURN 9 0xbacacafe0102030405", lockBuilder.getLockingScript().toBitcoindString());
     }
     //TODO: Add tests for other pushdata sizes
 
@@ -157,7 +155,7 @@ public class LockUnlockBuilderTests {
         LockingScriptBuilder lockBuilder = new P2PKLockBuilder(pubkey);
         Script script = lockBuilder.getLockingScript();
         assertNotNull(script);
-        assertEquals( "33 0x022df8750480ad5b26950b25c7ba79d3e37d75f640f8e5d9bcd5b150a0f85014da OP_CHECKSIG", script.toAsmString());
+        assertEquals( "33 0x022df8750480ad5b26950b25c7ba79d3e37d75f640f8e5d9bcd5b150a0f85014da OP_CHECKSIG", script.toBitcoindString());
     }
 
     @Test
@@ -193,7 +191,7 @@ public class LockUnlockBuilderTests {
         P2PKHLockBuilder lockBulder = new P2PKHLockBuilder(address);
         Script script = lockBulder.getLockingScript();
         assertNotNull(script);
-        assertEquals("OP_DUP OP_HASH160 20 0xecae7d092947b7ee4998e254aa48900d26d2ce1d OP_EQUALVERIFY OP_CHECKSIG", script.toAsmString());
+        assertEquals("OP_DUP OP_HASH160 20 0xecae7d092947b7ee4998e254aa48900d26d2ce1d OP_EQUALVERIFY OP_CHECKSIG", script.toBitcoindString());
         assertEquals(lockBulder.getAddress().toString(), "1NaTVwXDDUJaXDQajoa9MqHhz4uTxtgK14");
     }
 
@@ -204,7 +202,7 @@ public class LockUnlockBuilderTests {
         P2PKHLockBuilder lockBuilder = P2PKHLockBuilder.fromPublicKey(pubkey, NetworkAddressType.TEST_PKH);
         Script script = lockBuilder.getLockingScript();
         assertNotNull(script);
-        assertEquals("OP_DUP OP_HASH160 20 0x9674af7395592ec5d91573aa8d6557de55f60147 OP_EQUALVERIFY OP_CHECKSIG",   script.toAsmString());
+        assertEquals("OP_DUP OP_HASH160 20 0x9674af7395592ec5d91573aa8d6557de55f60147 OP_EQUALVERIFY OP_CHECKSIG",   script.toBitcoindString());
         assertEquals(lockBuilder.getAddress().getNetworkType(), NetworkType.TEST);
 
     }
@@ -214,7 +212,7 @@ public class LockUnlockBuilderTests {
 
         PublicKey pubkey = PublicKey.fromHex("04e365859b3c78a8b7c202412b949ebca58e147dba297be29eee53cd3e1d300a6419bc780cc9aec0dc94ed194e91c8f6433f1b781ee00eac0ead2aae1e8e0712c6");
         TransactionSignature signature = TransactionSignature.fromTxFormat("3046022100bb3c194a30e460d81d34be0a230179c043a656f67e3c5c8bf47eceae7c4042ee0221008bf54ca11b2985285be0fd7a212873d243e6e73f5fad57e8eb14c4f39728b8c601");
-        Script script = Script.fromAsmString("73 0x3046022100bb3c194a30e460d81d34be0a230179c043a656f67e3c5c8bf47eceae7c4042ee0221008bf54ca11b2985285be0fd7a212873d243e6e73f5fad57e8eb14c4f39728b8c601 65 0x04e365859b3c78a8b7c202412b949ebca58e147dba297be29eee53cd3e1d300a6419bc780cc9aec0dc94ed194e91c8f6433f1b781ee00eac0ead2aae1e8e0712c6");
+        Script script = Script.fromBitcoindString("73 0x3046022100bb3c194a30e460d81d34be0a230179c043a656f67e3c5c8bf47eceae7c4042ee0221008bf54ca11b2985285be0fd7a212873d243e6e73f5fad57e8eb14c4f39728b8c601 65 0x04e365859b3c78a8b7c202412b949ebca58e147dba297be29eee53cd3e1d300a6419bc780cc9aec0dc94ed194e91c8f6433f1b781ee00eac0ead2aae1e8e0712c6");
 
         P2PKHUnlockBuilder unlockBuilder= new P2PKHUnlockBuilder(script);
 
@@ -227,22 +225,22 @@ public class LockUnlockBuilderTests {
     @Test
     public void canCreateScriptPubkeyFromHash() throws IOException {
 
-        Script inner = Script.fromAsmString("OP_DUP OP_HASH160 20 0x06c06f6d931d7bfba2b5bd5ad0d19a8f257af3e3 OP_EQUALVERIFY OP_CHECKSIG");
+        Script inner = Script.fromBitcoindString("OP_DUP OP_HASH160 20 0x06c06f6d931d7bfba2b5bd5ad0d19a8f257af3e3 OP_EQUALVERIFY OP_CHECKSIG");
         byte[] scriptHash = Utils.sha256hash160(inner.getProgram());
         P2SHLockBuilder lockBuilder = new P2SHLockBuilder(ByteBuffer.wrap(scriptHash));
         Script script = lockBuilder.getLockingScript();
         assertNotNull(script);
-        assertEquals("OP_HASH160 20 0x45ea3f9133e7b1cef30ba606f8433f993e41e159 OP_EQUAL", script.toAsmString());
+        assertEquals("OP_HASH160 20 0x45ea3f9133e7b1cef30ba606f8433f993e41e159 OP_EQUAL", script.toBitcoindString());
 
     }
 
     @Test
     public void createsP2SHLockingScriptFromScript() throws IOException {
-        Script inner = Script.fromAsmString("OP_DUP OP_HASH160 20 0x06c06f6d931d7bfba2b5bd5ad0d19a8f257af3e3 OP_EQUALVERIFY OP_CHECKSIG");
+        Script inner = Script.fromBitcoindString("OP_DUP OP_HASH160 20 0x06c06f6d931d7bfba2b5bd5ad0d19a8f257af3e3 OP_EQUALVERIFY OP_CHECKSIG");
         P2SHLockBuilder lockBuilder = new P2SHLockBuilder(inner);
         Script script = lockBuilder.getLockingScript();
         assertNotNull(script);
-        assertEquals(script.toAsmString(), "OP_HASH160 20 0x45ea3f9133e7b1cef30ba606f8433f993e41e159 OP_EQUAL");
+        assertEquals("OP_HASH160 20 0x45ea3f9133e7b1cef30ba606f8433f993e41e159 OP_EQUAL", script.toBitcoindString());
 
     }
 
@@ -251,7 +249,7 @@ public class LockUnlockBuilderTests {
 
         P2MSLockBuilder lockBuilder = new P2MSLockBuilder(sortkeys, 2, true);
         Script script = lockBuilder.getLockingScript();
-        assertEquals( "OP_2 33 0x021f2f6e1e50cb6a953935c3601284925decd3fd21bc445712576873fb8c6ebc18 33 0x022df8750480ad5b26950b25c7ba79d3e37d75f640f8e5d9bcd5b150a0f85014da 33 0x03e3818b65bcc73a7d64064106a859cc1a5a728c4345ff0b641209fba0d90de6e9 OP_3 OP_CHECKMULTISIG", script.toAsmString() );
+        assertEquals( "OP_2 33 0x021f2f6e1e50cb6a953935c3601284925decd3fd21bc445712576873fb8c6ebc18 33 0x022df8750480ad5b26950b25c7ba79d3e37d75f640f8e5d9bcd5b150a0f85014da 33 0x03e3818b65bcc73a7d64064106a859cc1a5a728c4345ff0b641209fba0d90de6e9 OP_3 OP_CHECKMULTISIG", script.toBitcoindString() );
     }
 
     @Test
@@ -269,15 +267,15 @@ public class LockUnlockBuilderTests {
         Script sortedScript = lockBuilder.getLockingScript();
         Script unsortedScript = unsortedLockBuilder.getLockingScript();
 
-        assertNotEquals(sortedScript.toAsmString(), unsortedScript.toAsmString());
-        assertEquals("OP_2 33 0x022df8750480ad5b26950b25c7ba79d3e37d75f640f8e5d9bcd5b150a0f85014da 33 0x03e3818b65bcc73a7d64064106a859cc1a5a728c4345ff0b641209fba0d90de6e9 33 0x021f2f6e1e50cb6a953935c3601284925decd3fd21bc445712576873fb8c6ebc18 OP_3 OP_CHECKMULTISIG", unsortedScript.toAsmString());
+        assertNotEquals(sortedScript.toBitcoindString(), unsortedScript.toBitcoindString());
+        assertEquals("OP_2 33 0x022df8750480ad5b26950b25c7ba79d3e37d75f640f8e5d9bcd5b150a0f85014da 33 0x03e3818b65bcc73a7d64064106a859cc1a5a728c4345ff0b641209fba0d90de6e9 33 0x021f2f6e1e50cb6a953935c3601284925decd3fd21bc445712576873fb8c6ebc18 OP_3 OP_CHECKMULTISIG", unsortedScript.toBitcoindString());
 
     }
 
     @Test
     public void canRecoverStateFromScript() throws IOException {
-        Script script = Script.fromAsmString("OP_2 33 0x022df8750480ad5b26950b25c7ba79d3e37d75f640f8e5d9bcd5b150a0f85014da 33 0x03e3818b65bcc73a7d64064106a859cc1a5a728c4345ff0b641209fba0d90de6e9 33 0x021f2f6e1e50cb6a953935c3601284925decd3fd21bc445712576873fb8c6ebc18 OP_3 OP_CHECKMULTISIG");
-//        Script script = Script.fromAsmString("2 33 0x022df8750480ad5b26950b25c7ba79d3e37d75f640f8e5d9bcd5b150a0f85014da 33 0x03e3818b65bcc73a7d64064106a859cc1a5a728c4345ff0b641209fba0d90de6e9 2 CHECKMULTISIG");
+        Script script = Script.fromBitcoindString("OP_2 33 0x022df8750480ad5b26950b25c7ba79d3e37d75f640f8e5d9bcd5b150a0f85014da 33 0x03e3818b65bcc73a7d64064106a859cc1a5a728c4345ff0b641209fba0d90de6e9 33 0x021f2f6e1e50cb6a953935c3601284925decd3fd21bc445712576873fb8c6ebc18 OP_3 OP_CHECKMULTISIG");
+//        Script script = Script.fromBitcoindString("2 33 0x022df8750480ad5b26950b25c7ba79d3e37d75f640f8e5d9bcd5b150a0f85014da 33 0x03e3818b65bcc73a7d64064106a859cc1a5a728c4345ff0b641209fba0d90de6e9 2 CHECKMULTISIG");
 
         P2MSLockBuilder lockBuilder = new P2MSLockBuilder(script);
 
@@ -290,7 +288,7 @@ public class LockUnlockBuilderTests {
     @Test
     public void canUnlockP2MS() throws IOException {
 
-        Script script = Script.fromAsmString("OP_0 71 0x3044022002a27769ee33db258bdf7a3792e7da4143ec4001b551f73e6a190b8d1bde449d02206742c56ccd94a7a2e16ca52fc1ae4a0aa122b0014a867a80de104f9cb18e472c01 72 0x30450220357011fd3b3ad2b8f2f2d01e05dc6108b51d2a245b4ef40c112d6004596f0475022100a8208c93a39e0c366b983f9a80bfaf89237fcd64ca543568badd2d18ee2e1d7501");
+        Script script = Script.fromBitcoindString("OP_0 71 0x3044022002a27769ee33db258bdf7a3792e7da4143ec4001b551f73e6a190b8d1bde449d02206742c56ccd94a7a2e16ca52fc1ae4a0aa122b0014a867a80de104f9cb18e472c01 72 0x30450220357011fd3b3ad2b8f2f2d01e05dc6108b51d2a245b4ef40c112d6004596f0475022100a8208c93a39e0c366b983f9a80bfaf89237fcd64ca543568badd2d18ee2e1d7501");
         P2MSUnlockBuilder unlockBuilder = new P2MSUnlockBuilder(script);
 
         assertEquals(2, unlockBuilder.getSignatures().size());

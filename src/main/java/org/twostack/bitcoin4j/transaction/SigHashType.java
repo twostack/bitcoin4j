@@ -42,4 +42,14 @@ public enum SigHashType {
     public byte byteValue() {
         return (byte) this.value;
     }
+
+    public static boolean hasValue(int value){
+
+        for (SigHashType t : values()){
+            if (t.value == value)
+                return true;
+        }
+
+        return false;
+    }
 }

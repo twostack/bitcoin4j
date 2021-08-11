@@ -8,6 +8,8 @@ import org.twostack.bitcoin4j.script.ScriptOpCodes;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.EnumSet;
+import java.util.Set;
 
 import static org.twostack.bitcoin4j.Utils.HEX;
 import static org.twostack.bitcoin4j.script.ScriptOpCodes.OP_INVALIDOPCODE;
@@ -49,5 +51,20 @@ public class TestUtil {
         }
 
         return new Script(out.toByteArray());
+    }
+
+
+    public static Set<Script.VerifyFlag> parseVerifyFlags(String str) {
+        Set<Script.VerifyFlag> flags = EnumSet.noneOf(Script.VerifyFlag.class);
+        if (!"NONE".equals(str)) {
+            for (String flag : str.split(",")) {
+                try {
+                    flags.add(Script.VerifyFlag.valueOf(flag));
+                } catch (IllegalArgumentException x) {
+                    System.out.println("Cannot handle verify flag {} -- ignored.");
+                }
+            }
+        }
+        return flags;
     }
 }

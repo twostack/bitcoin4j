@@ -560,6 +560,76 @@ public class ECKey {
             }
         }
 
+        public static ECDSASignature decodeFlexDER(byte[] buf, boolean strict) throws SignatureDecodeException {
+
+            if (buf == null || buf.length == 0){
+                throw new SignatureDecodeException("Empty DER Signature");
+            }
+
+            byte header = buf[0];
+
+            if (header != 0x30) {
+              throw new SignatureDecodeException("Header byte should be 0x30");
+            }
+
+            int length = buf[1];
+            int buflength = Arrays.copyOfRange(buf, 2, buf.length).length;
+            if (strict && length != buflength) {
+              throw new SignatureDecodeException("Length byte should equal length of what follows");
+            } else {
+              length = length < buflength ? length : buflength;
+            }
+
+            int rheader = buf[2 + 0];
+            if (rheader != 0x02) {
+              throw new SignatureDecodeException("Integer byte for r should be 0x02");
+            }
+
+            int rlength = buf[2 + 1];
+            byte[] rbuf = Arrays.copyOfRange(buf, 2 +2, 2 + 2 + rlength); // buf.slice(2 + 2, 2 + 2 + rlength)
+            BigInteger r = new BigInteger(Utils.HEX.encode(rbuf), 16); //TODO :use Bytes ?
+            boolean rneg = buf[2 + 1 + 1] == 0x00;
+            if (rlength != rbuf.length) {
+              throw new SignatureDecodeException("Length of r is incorrect");
+            }
+
+            byte sheader = buf[2 + 2 + rlength + 0];
+            if (sheader != 0x02) {
+              throw new SignatureDecodeException("Integer byte for s should be 0x02");
+            }
+
+            int slength = buf[2 + 2 + rlength + 1];
+            byte[] sbuf = Arrays.copyOfRange(buf, 2 + 2 + rlength + 2, 2 + 2 +rlength + 2 + slength); //buf.slice(2 + 2 + rlength + 2, 2 + 2 + rlength + 2 + slength)
+            BigInteger s = new BigInteger(Utils.HEX.encode(sbuf), 16);
+
+            if (slength != sbuf.length) {
+              throw new SignatureDecodeException("LEngth of s incorrect");
+            }
+
+            int sumlength = 2 + 2 + rlength + 2 + slength;
+            if (length != sumlength - 2) {
+              throw new SignatureDecodeException("Length of signature incorrect");
+            }
+
+            return new ECDSASignature(r, s);
+
+//            const obj = {
+//              header: header,
+//              length: length,
+//              rheader: rheader,
+//              rlength: rlength,
+//              rneg: rneg,
+//              rbuf: rbuf,
+//              r: r,
+//              sheader: sheader,
+//              slength: slength,
+//              sneg: sneg,
+//              sbuf: sbuf,
+//              s: s
+//            }
+//             */
+        }
+
         protected ByteArrayOutputStream derByteStream() throws IOException {
             // Usually 70-72 bytes.
             ByteArrayOutputStream bos = new ByteArrayOutputStream(72);

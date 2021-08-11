@@ -31,7 +31,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.*;
@@ -84,8 +83,13 @@ public class Script {
         DISCOURAGE_UPGRADABLE_NOPS, // Discourage use of NOPs reserved for upgrades (NOP1-10)
         CLEANSTACK, // Require that only a single stack element remains after evaluation.
         CHECKLOCKTIMEVERIFY, // Enable CHECKLOCKTIMEVERIFY operation
-        ENABLESIGHASHFORKID,
-        MONOLITH_OPCODES // May 15, 2018 Hard fork
+        CHECKSEQUENCEVERIFY,
+        SIGHASH_FORKID,
+        MONOLITH_OPCODES, // May 15, 2018 Hard fork
+        UTXO_AFTER_GENESIS,
+        MINIMALIF,
+        NULLFAIL,
+        COMPRESSED_PUBKEYTYPE
     }
     public static final EnumSet<VerifyFlag> ALL_VERIFY_FLAGS = EnumSet.allOf(VerifyFlag.class);
 
@@ -136,10 +140,58 @@ public class Script {
         return new Script(programBytes, LocalDateTime.now().toEpochSecond(ZoneOffset.UTC));
     }
 
-    public static Script fromAsmString(String program) throws ScriptException{
+    public static Script fromBitcoindString(String program) throws ScriptException{
         List<ScriptChunk> chunks = stringToChunks(program);
 
         return new Script(chunks);
+    }
+
+    public static Script fromAsmString(String program){
+       return new Script(asmToChunks(program));
+    }
+
+    private static List<ScriptChunk> asmToChunks(String str){
+
+        List<ScriptChunk> chunks = new ArrayList<ScriptChunk>();
+
+        String[] tokens = str.split(" ");
+        int i = 0;
+        while (i < tokens.length) {
+            String token = tokens[i];
+            int opCodeNum = OP_INVALIDOPCODE;
+            opCodeNum = ScriptOpCodes.getOpCode(token.replaceFirst("OP_", ""));
+
+            // we start with two special cases, 0 and -1, which are handled specially in
+            // toASM. see _chunkToString.
+            if (token == "0") {
+                opCodeNum = 0;
+                chunks.add(new ScriptChunk(opCodeNum, null));
+                i = i + 1;
+            } else if (token == "-1") {
+                opCodeNum = ScriptOpCodes.OP_1NEGATE;
+                chunks.add(new ScriptChunk(opCodeNum, null));
+                i = i + 1;
+            } else if (opCodeNum == OP_INVALIDOPCODE) {
+                String hex = tokens[i];
+                byte[] buf = HEX.decode(hex);
+                int len = buf.length;
+                if (len >= 0 && len < ScriptOpCodes.OP_PUSHDATA1) {
+                    opCodeNum = len;
+                } else if (len < Math.pow(2, 8)) {
+                    opCodeNum = ScriptOpCodes.OP_PUSHDATA1;
+                } else if (len < Math.pow(2, 16)) {
+                    opCodeNum = ScriptOpCodes.OP_PUSHDATA2;
+                } else if (len < Math.pow(2, 32)) {
+                    opCodeNum = ScriptOpCodes.OP_PUSHDATA4;
+                }
+                chunks.add(new ScriptChunk(opCodeNum, buf));
+                i = i + 1;
+            } else {
+                chunks.add(new ScriptChunk(opCodeNum, null));
+                i = i + 1;
+            }
+        }
+        return chunks;
     }
 
 
@@ -168,9 +220,9 @@ public class Script {
             return "<empty>";
     }
 
-    public String toAsmString(){
+    public String toBitcoindString(){
         if (!chunks.isEmpty()) {
-            List<String> asmStrings = chunks.stream().map(chunk -> chunk.toEncodedString()).collect(Collectors.toList());
+            List<String> asmStrings = chunks.stream().map(chunk -> chunk.toEncodedString(false)).collect(Collectors.toList());
             return Utils.SPACE_JOINER.join(asmStrings);
         } else {
             return "<empty>";
@@ -280,6 +332,7 @@ public class Script {
             if (opcode >= 0 && opcode < OP_PUSHDATA1) {
                 // Read some bytes of data, where how many is the opcode value itself.
                 dataToRead = opcode;
+
             } else if (opcode == OP_PUSHDATA1) {
                 if (bis.available() < 1) throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Unexpected end of script");
                 dataToRead = bis.read();
@@ -289,26 +342,32 @@ public class Script {
                 dataToRead = Utils.readUint16FromStream(bis);
             } else if (opcode == OP_PUSHDATA4) {
                 // Read a uint32, then read that many bytes of data.
-                // Though this is allowed, because its value cannot be > 520, it should never actually be used
                 if (bis.available() < 4) throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Unexpected end of script");
                 dataToRead = Utils.readUint32FromStream(bis);
+            }else{
+
             }
 
-            ScriptChunk chunk;
             if (dataToRead == -1) {
-                chunk = new ScriptChunk(opcode, null);
+                chunks.add(new ScriptChunk(opcode, null));
             } else {
                 if (dataToRead > bis.available())
-                    throw new ScriptException(ScriptError.SCRIPT_ERR_BAD_OPCODE, "Push of data element that is larger than remaining data: " + dataToRead + " vs " + bis.available());
-                byte[] data = new byte[(int)dataToRead];
-                checkState(dataToRead == 0 || bis.read(data, 0, (int)dataToRead) == dataToRead);
-                chunk = new ScriptChunk(opcode, data);
+                    throw new ScriptException(ScriptError.SCRIPT_ERR_BAD_OPCODE, "Length of push value is not equal to length of data");
+
+                try {
+
+                    ScriptChunk chunk;
+                    byte[] data = new byte[(int) dataToRead];
+
+                    bis.read(data, 0, (int) dataToRead);
+                    chunk = new ScriptChunk(opcode, data);
+
+                    chunks.add(chunk);
+                }catch(Exception ex){
+                    bis.read();
+                }
             }
             // Save some memory by eliminating redundant copies of the same chunk objects.
-            for (ScriptChunk c : STANDARD_TRANSACTION_SCRIPT_CHUNKS) {
-                if (c.equals(chunk)) chunk = c;
-            }
-            chunks.add(chunk);
         }
     }
 
@@ -570,4 +629,43 @@ public class Script {
     public int hashCode() {
         return Arrays.hashCode(getQuickProgram());
     }
+
+
+
+    /*
+    SCRIPT_ERR_CLEANSTACK
+    bool CScript::IsPushOnly(const_iterator pc) const {
+    while (pc < end()) {
+        opcodetype opcode;
+        if (!GetOp(pc, opcode)) return false;
+        // Note that IsPushOnly() *does* consider OP_RESERVED to be a push-type
+        // opcode, however execution of OP_RESERVED fails, so it's not relevant
+        // to P2SH/BIP62 as the scriptSig would fail prior to the P2SH special
+        // validation code being executed.
+        if (opcode > OP_16) return false;
+    }
+    return true;
+}
+
+bool CScript::IsPushOnly() const {
+    return this->IsPushOnly(begin());
+}
+     */
+    public static boolean isPushOnly(Script scriptSig) {
+
+        List<ScriptChunk> chunks = scriptSig.getChunks();
+
+        if (chunks.isEmpty()){
+            return true;
+        }
+
+        for (ScriptChunk chunk : chunks){
+            if (!chunk.isPushData()){
+                return false;
+            }
+        }
+
+        return true;
+    }
+
 }

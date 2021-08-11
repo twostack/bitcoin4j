@@ -55,9 +55,6 @@ public class Transaction {
     /** How many bytes a transaction can be before it won't be relayed anymore. Currently 100kb. */
     public static final int MAX_STANDARD_TX_SIZE = 100000;
 
-    private ByteBuffer txHash;
-
-
     public Transaction(){
 
     }
@@ -67,8 +64,6 @@ public class Transaction {
      */
     public Transaction(ByteBuffer buffer){
 
-        byte[] hash = Sha256Hash.hashTwice(buffer.array());
-        txHash = ByteBuffer.wrap(hash);
         parseBuffer(buffer);
     }
 
@@ -247,18 +242,19 @@ public class Transaction {
 
     public String getTransactionId(){
         byte[] idBytes = getTransactionIdBytes();
-        if (idBytes.length == 0) {
-            return "";
-        }
-        return Utils.HEX.encode(idBytes);
+        return Utils.HEX.encode(Utils.reverseBytes(idBytes));
     }
 
     public byte[] getTransactionIdBytes(){
-        if (txHash == null){
-            return new byte[]{};
+
+        byte[] rawTx = new byte[]{};
+        try {
+            rawTx = this.serialize();
+        }catch(IOException ex){
+
         }
 
-        return Utils.reverseBytes(txHash.array());
+        return Sha256Hash.hashTwice(rawTx);
     }
 
     public void addOutput(TransactionOutput output) {
