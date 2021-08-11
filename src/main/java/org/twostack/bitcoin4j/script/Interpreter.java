@@ -33,6 +33,7 @@ import org.twostack.bitcoin4j.transaction.*;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -50,9 +51,23 @@ public class Interpreter {
 
     private static final Logger log = LoggerFactory.getLogger(Script.class);
 
-//    public static final long MAX_SCRIPT_ELEMENT_SIZE = 520;  // bytes
+    // Maximum script number length after Genesis
+    //consensus.h in node client
+    /** 1KB */
+    public static final int ONE_KILOBYTE = 1000;
+
+    //    public static final long MAX_SCRIPT_ELEMENT_SIZE = 520;  // bytes
     public static final long MAX_SCRIPT_ELEMENT_SIZE = 2147483647;  // 2Gigabytes after Genesis - (2^31 -1)
-    private static final int MAX_OPS_PER_SCRIPT = 201;
+//    private static final int MAX_OPS_PER_SCRIPT = 201;
+
+    // Maximum number of non-push operations per script after GENESIS
+    // Maximum number of non-push operations per script before GENESIS
+    private static final long MAX_OPS_PER_SCRIPT_BEFORE_GENESIS = 500;
+
+// Maximum number of non-push operations per script after GENESIS
+    private static long UINT32_MAX = 4294967295L;
+    private static final long MAX_OPS_PER_SCRIPT_AFTER_GENESIS = UINT32_MAX;
+
     private static final int MAX_STACK_SIZE = 1000;
     private static final int DEFAULT_MAX_NUM_ELEMENT_SIZE = 4;
     private static final int MAX_PUBKEYS_PER_MULTISIG = 20;
@@ -60,6 +75,11 @@ public class Interpreter {
     public static final int SIG_SIZE = 75;
     /** Max number of sigops allowed in a standard p2sh redeem script */
     public static final int MAX_P2SH_SIGOPS = 15;
+
+    // Maximum script number length after Genesis
+    public static final int MAX_SCRIPT_NUM_LENGTH_AFTER_GENESIS = 750 * ONE_KILOBYTE;
+
+    public static final int MAX_SCRIPT_NUM_LENGTH_BEFORE_GENESIS = 4;
     public static final int DEFAULT_SCRIPT_NUM_LENGTH_POLICY_AFTER_GENESIS = 250 * 1024;
 
     public static final int MAX_SCRIPT_ELEMENT_SIZE_BEFORE_GENESIS = 520;
@@ -207,6 +227,9 @@ public class Interpreter {
         int opCount = 0;
         int lastCodeSepLocation = 0;
         final boolean enforceMinimal = verifyFlags.contains(VerifyFlag.MINIMALDATA);
+        final boolean utxoAfterGenesis = verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS);
+        final int maxScriptNumLength = getMaxScriptNumLength(utxoAfterGenesis);
+
 
         LinkedList<byte[]> altstack = new LinkedList<>();
         LinkedList<Boolean> ifStack = new LinkedList<>();
@@ -228,7 +251,7 @@ public class Interpreter {
             // Note how OP_RESERVED does not count towards the opcode limit.
             if (opcode > OP_16) {
                 opCount++;
-                if (opCount > DEFAULT_SCRIPT_NUM_LENGTH_POLICY_AFTER_GENESIS)
+                if (!isValidMaxOpsPerScript(opCount, utxoAfterGenesis))
                     throw new ScriptException(ScriptError.SCRIPT_ERR_OP_COUNT, "More script operations than is allowed");
             }
 
@@ -445,7 +468,7 @@ public class Interpreter {
                     case OP_ROLL:
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_PICK/OP_ROLL on an empty stack");
-                        long val = castToBigInteger(stack.pollLast(), verifyFlags.contains(VerifyFlag.MINIMALDATA)).longValue();
+                        long val = castToBigInteger(stack.pollLast(),maxScriptNumLength, verifyFlags.contains(VerifyFlag.MINIMALDATA)).longValue();
                         if (val < 0 || val >= stack.size())
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "OP_PICK/OP_ROLL attempted to get data deeper than stack size");
                         Iterator<byte[]> itPICK = stack.descendingIterator();
@@ -500,7 +523,7 @@ public class Interpreter {
                         if (stack.size() < 2)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
 
-                        int numSize = castToBigInteger(stack.pollLast(), enforceMinimal).intValue();
+                        int numSize = castToBigInteger(stack.pollLast(), maxScriptNumLength,enforceMinimal).intValue();
 
                         if (!verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && numSize > MAX_SCRIPT_ELEMENT_SIZE_BEFORE_GENESIS)
                             throw new ScriptException(ScriptError.SCRIPT_ERR_PUSH_SIZE, "Push value size limit exceeded.");
@@ -538,7 +561,7 @@ public class Interpreter {
                         if (stack.size() < 2)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
 
-                        BigInteger biSplitPos = castToBigInteger(stack.pollLast(), enforceMinimal);
+                        BigInteger biSplitPos = castToBigInteger(stack.pollLast(), maxScriptNumLength,enforceMinimal);
 
                         //sanity check in case we aren't enforcing minimal number encoding
                         //we will check that the biSplitPos value can be safely held in an int
@@ -571,7 +594,7 @@ public class Interpreter {
                         byte[] binBytes = stack.pollLast();
                         byte[] numBytes = Utils.minimallyEncodeLE(binBytes);
 
-                        if (!Utils.checkMinimallyEncodedLE(numBytes, DEFAULT_MAX_NUM_ELEMENT_SIZE))
+                        if (!Utils.checkMinimallyEncodedLE(numBytes, maxScriptNumLength))
                             throw new ScriptException(ScriptError.SCRIPT_ERR_INVALID_NUMBER_RANGE, "Given operand is not a number within the valid range [-2^31...2^31]");
 
                         stack.addLast(numBytes);
@@ -705,7 +728,7 @@ public class Interpreter {
                     case OP_0NOTEQUAL:
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted a numeric op on an empty stack");
-                        BigInteger numericOPnum = castToBigInteger(stack.pollLast(), verifyFlags.contains(VerifyFlag.MINIMALDATA));
+                        BigInteger numericOPnum = castToBigInteger(stack.pollLast(), maxScriptNumLength,verifyFlags.contains(VerifyFlag.MINIMALDATA));
 
                         switch (opcode) {
                             case OP_1ADD:
@@ -756,8 +779,8 @@ public class Interpreter {
                     case OP_MAX:
                         if (stack.size() < 2)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted a numeric op on a stack with size < 2");
-                        BigInteger numericOPnum2 = castToBigInteger(stack.pollLast(), verifyFlags.contains(VerifyFlag.MINIMALDATA));
-                        BigInteger numericOPnum1 = castToBigInteger(stack.pollLast(), verifyFlags.contains(VerifyFlag.MINIMALDATA));
+                        BigInteger numericOPnum2 = castToBigInteger(stack.pollLast(),maxScriptNumLength, verifyFlags.contains(VerifyFlag.MINIMALDATA));
+                        BigInteger numericOPnum1 = castToBigInteger(stack.pollLast(),maxScriptNumLength, verifyFlags.contains(VerifyFlag.MINIMALDATA));
 
                         BigInteger numericOPresult;
                         switch (opcode) {
@@ -784,23 +807,16 @@ public class Interpreter {
 
                                 /**
                                  * BigInteger doesn't behave the way we want for modulo operations.  Firstly it's
-                                 * always garunteed to return a +ve result.  Secondly it will throw an exception
-                                 * if the 2nd operand is negative.  So we'll convert the values to longs and use native
-                                 * modulo.  When we expand the number limits to arbitrary length we will likely need
-                                 * a new BigNum implementation to handle this correctly.
+                                 * always guaranteed to return a +ve result.  Secondly it will throw an exception
+                                 * if the 2nd operand is negative.
+                                 * Instead we will use the BigDecimal to perform modular arithmetic, then convert
+                                 * back to BigInteger
                                  */
-                                long lOp1 = numericOPnum1.longValue();
-                                if (!BigInteger.valueOf(lOp1).equals(numericOPnum1)) {
-                                    //in case the value is larger than a long can handle we need to crash and burn.
-                                    throw new RuntimeException("Cannot handle large negative operand for modulo operation");
-                                }
-                                long lOp2 = numericOPnum2.longValue();
-                                if (!BigInteger.valueOf(lOp2).equals(numericOPnum2)) {
-                                    //in case the value is larger than a long can handle we need to crash and burn.
-                                    throw new RuntimeException("Cannot handle large negative operand for modulo operation");
-                                }
-                                long lOpResult = lOp1 % lOp2;
-                                numericOPresult = BigInteger.valueOf(lOpResult);
+
+                                BigDecimal bd1 = new BigDecimal(numericOPnum1);
+                                BigDecimal bd2 = new BigDecimal(numericOPnum2);
+
+                                numericOPresult = bd1.remainder(bd2).toBigInteger();
 
                                 break;
 
@@ -873,8 +889,8 @@ public class Interpreter {
                     case OP_NUMEQUALVERIFY:
                         if (stack.size() < 2)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_NUMEQUALVERIFY on a stack with size < 2");
-                        BigInteger OPNUMEQUALVERIFYnum2 = castToBigInteger(stack.pollLast(), verifyFlags.contains(VerifyFlag.MINIMALDATA));
-                        BigInteger OPNUMEQUALVERIFYnum1 = castToBigInteger(stack.pollLast(), verifyFlags.contains(VerifyFlag.MINIMALDATA));
+                        BigInteger OPNUMEQUALVERIFYnum2 = castToBigInteger(stack.pollLast(), maxScriptNumLength,verifyFlags.contains(VerifyFlag.MINIMALDATA));
+                        BigInteger OPNUMEQUALVERIFYnum1 = castToBigInteger(stack.pollLast(), maxScriptNumLength,verifyFlags.contains(VerifyFlag.MINIMALDATA));
 
                         if (!OPNUMEQUALVERIFYnum1.equals(OPNUMEQUALVERIFYnum2))
                             throw new ScriptException(ScriptError.SCRIPT_ERR_NUMEQUALVERIFY, "OP_NUMEQUALVERIFY failed");
@@ -882,9 +898,9 @@ public class Interpreter {
                     case OP_WITHIN:
                         if (stack.size() < 3)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_WITHIN on a stack with size < 3");
-                        BigInteger OPWITHINnum3 = castToBigInteger(stack.pollLast(), verifyFlags.contains(VerifyFlag.MINIMALDATA));
-                        BigInteger OPWITHINnum2 = castToBigInteger(stack.pollLast(), verifyFlags.contains(VerifyFlag.MINIMALDATA));
-                        BigInteger OPWITHINnum1 = castToBigInteger(stack.pollLast(), verifyFlags.contains(VerifyFlag.MINIMALDATA));
+                        BigInteger OPWITHINnum3 = castToBigInteger(stack.pollLast(),maxScriptNumLength,verifyFlags.contains(VerifyFlag.MINIMALDATA));
+                        BigInteger OPWITHINnum2 = castToBigInteger(stack.pollLast(),maxScriptNumLength,verifyFlags.contains(VerifyFlag.MINIMALDATA));
+                        BigInteger OPWITHINnum1 = castToBigInteger(stack.pollLast(),maxScriptNumLength,verifyFlags.contains(VerifyFlag.MINIMALDATA));
                         if (OPWITHINnum2.compareTo(OPWITHINnum1) <= 0 && OPWITHINnum1.compareTo(OPWITHINnum3) < 0)
                             stack.add(Utils.reverseBytes(Utils.encodeMPI(BigInteger.ONE, false)));
                         else
@@ -1438,17 +1454,20 @@ public class Interpreter {
                 || verifyFlags.contains(VerifyFlag.DERSIG)
                 || verifyFlags.contains(VerifyFlag.LOW_S);
         final boolean enforceMinimal = verifyFlags.contains(VerifyFlag.MINIMALDATA);
+        final boolean utxoAfterGenesis = verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS);
 
         if (stack.size() < 1)
             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < 2");
 
-        int pubKeyCount = castToBigInteger(stack.pollLast(), enforceMinimal).intValue();
+        int pubKeyCount = castToBigInteger(stack.pollLast(), getMaxScriptNumLength(utxoAfterGenesis), enforceMinimal).intValue();
         if (pubKeyCount < 0 || (!verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && pubKeyCount > 20)
                 || (verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && pubKeyCount > Integer.MAX_VALUE))
             throw new ScriptException(ScriptError.SCRIPT_ERR_PUBKEY_COUNT, "OP_CHECKMULTISIG(VERIFY) with pubkey count out of range");
         opCount += pubKeyCount;
-        if (opCount > DEFAULT_SCRIPT_NUM_LENGTH_POLICY_AFTER_GENESIS)
+
+        if (!isValidMaxOpsPerScript(opCount, utxoAfterGenesis))
             throw new ScriptException(ScriptError.SCRIPT_ERR_CHECKMULTISIGVERIFY, "Total op (count > 250 * 1024) during OP_CHECKMULTISIG(VERIFY)");
+
         if (stack.size() < pubKeyCount + 1)
             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKMULTISIG(VERIFY) on a stack with size < num_of_pubkeys + 2");
 
@@ -1459,7 +1478,7 @@ public class Interpreter {
             pubkeys.add(pubKey);
         }
 
-        int sigCount = castToBigInteger(stack.pollLast(), enforceMinimal).intValue();
+        int sigCount = castToBigInteger(stack.pollLast(), getMaxScriptNumLength(utxoAfterGenesis), enforceMinimal).intValue();
         if (sigCount < 0 || sigCount > pubKeyCount)
             throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_COUNT, "OP_CHECKMULTISIG(VERIFY) with sig count out of range");
         if (stack.size() < sigCount + 1)
@@ -1652,5 +1671,25 @@ public class Interpreter {
         // comparison is a simple numeric one.
         if (nSequenceMasked > txToSequenceMasked)
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Relative locktime requirement not satisfied");
+    }
+
+    private static int getMaxScriptNumLength(boolean isGenesisEnabled) {
+        if (!isGenesisEnabled) {
+            return MAX_SCRIPT_NUM_LENGTH_BEFORE_GENESIS;
+        }
+
+        return MAX_SCRIPT_NUM_LENGTH_AFTER_GENESIS; // use new limit after genesis
+    }
+
+    private static long getMaxOpsPerScript(boolean isGenesisEnabled) {
+        if (!isGenesisEnabled) {
+            return MAX_OPS_PER_SCRIPT_BEFORE_GENESIS; // no changes before genesis
+        }
+
+        return MAX_OPS_PER_SCRIPT_AFTER_GENESIS; // use new limit after genesis
+    }
+
+    private static boolean isValidMaxOpsPerScript(int nOpCount, boolean isGenesisEnabled) {
+        return (nOpCount <= getMaxOpsPerScript(isGenesisEnabled));
     }
 }
