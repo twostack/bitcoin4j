@@ -137,22 +137,23 @@ public class SigHash {
                 return Sha256Hash.wrap("0100000000000000000000000000000000000000000000000000000000000000").getBytes();
             }
 
-            TransactionOutput output = txnCopy.getOutputs().get(inputIndex);
-            TransactionOutput txout = new TransactionOutput(output.getAmount(), output.getScript());
-
-            //resize outputs to current size of inputIndex + 1
-
-            int outputCount = inputIndex + 1;
+            // In SIGHASH_SINGLE the outputs after the matching input index are deleted, and the outputs before
+            // that position are "nulled out". Unintuitively, the value in a "null" transaction is set to -1.
+            List replacementOutputs = new ArrayList<>(txnCopy.getOutputs().subList(0, inputIndex + 1));
             txnCopy.clearOutputs(); //remove all the outputs
+            txnCopy.addOutputs(replacementOutputs);
             //create new outputs up to inputIndex + 1
-            for (int ndx = 0; ndx < inputIndex + 1; ndx++) {
-                //FIXME: What's going on here ?
-                TransactionOutput tx = new TransactionOutput(new BigInteger(_BITS_64_ON, 16), new ScriptBuilder().build());
-                txnCopy.addOutput(tx);
+            for (int ndx = 0; ndx < inputIndex ; ndx++) {
+                TransactionOutput output = new TransactionOutput(BigInteger.valueOf(Coin.NEGATIVE_SATOSHI.value), new ScriptBuilder().build());
+                txnCopy.replaceOutput(ndx, output);
             }
 
-            //add back the saved output in the corresponding position of inputIndex
-            txnCopy.replaceOutput(inputIndex, txout); //FIXME : ??? Is this the correct way ?
+            // The signature isn't broken by new versions of the transaction issued by other parties.
+            for (int i = 0; i < txnCopy.getInputs().size(); i++){
+                if (i != inputIndex)
+                    txnCopy.getInputs().get(i).setSequenceNumber(0);
+            }
+
         }
 
         if ((this._sigHashType & SigHashType.ANYONECANPAY.value) > 0) {
@@ -235,31 +236,39 @@ public class SigHash {
         if ((sigHashType & 31) == SigHashType.NONE.value) {
             txnCopy.clearOutputs();
         } else if ((sigHashType & 31) == SigHashType.SINGLE.value) {
+
             // The SIGHASH_SINGLE bug.
             // https://bitcointalk.org/index.php?topic=260595.0
-            // NOTE: This Pre-Image calculation should not be used
-            // with SigHash algorithm since it does not handle the SIGHASH_SINGLE bug
-            // Instead it returns the preimage even if input index > number of outputs
-            // by simply skipping this part
-            if (inputIndex < txnCopy.getOutputs().size()) {
+            if (inputIndex >= txnCopy.getOutputs().size()) {
 
-                TransactionOutput output = txnCopy.getOutputs().get(inputIndex);
-                TransactionOutput txout = new TransactionOutput(output.getAmount(), output.getScript());
+                // The input index is beyond the number of outputs, it's a buggy signature made by a broken
+                // Bitcoin implementation. Bitcoin Core also contains a bug in handling this case:
+                // any transaction output that is signed in this case will result in both the signed output
+                // and any future outputs to this public key being steal-able by anyone who has
+                // the resulting signature and the public key (both of which are part of the signed tx input).
 
-                //resize outputs to current size of inputIndex + 1
-
-                int outputCount = inputIndex + 1;
-                txnCopy.clearOutputs(); //remove all the outputs
-                //create new outputs up to inputIndex + 1
-                for (int ndx = 0; ndx < inputIndex + 1; ndx++) {
-                    //FIXME: What's going on here ?
-                    TransactionOutput tx = new TransactionOutput(new BigInteger(_BITS_64_ON, 16), new ScriptBuilder().build());
-                    txnCopy.addOutput(tx);
-                }
-
-                //add back the saved output in the corresponding position of inputIndex
-                txnCopy.replaceOutput(inputIndex, txout);
+                // Bitcoin Core's bug is that SignatureHash was supposed to return a hash and on this codepath it
+                // actually returns the constant "1" to indicate an error, which is never checked for. Oops.
+                return Sha256Hash.wrap("0100000000000000000000000000000000000000000000000000000000000000").getBytes();
             }
+
+            // In SIGHASH_SINGLE the outputs after the matching input index are deleted, and the outputs before
+            // that position are "nulled out". Unintuitively, the value in a "null" transaction is set to -1.
+            List replacementOutputs = new ArrayList<>(txnCopy.getOutputs().subList(0, inputIndex + 1));
+            txnCopy.clearOutputs(); //remove all the outputs
+            txnCopy.addOutputs(replacementOutputs);
+            //create new outputs up to inputIndex + 1
+            for (int ndx = 0; ndx < inputIndex ; ndx++) {
+                TransactionOutput output = new TransactionOutput(BigInteger.valueOf(Coin.NEGATIVE_SATOSHI.value), new ScriptBuilder().build());
+                txnCopy.replaceOutput(ndx, output);
+            }
+
+            // The signature isn't broken by new versions of the transaction issued by other parties.
+            for (int i = 0; i < txnCopy.getInputs().size(); i++){
+                if (i != inputIndex)
+                    txnCopy.getInputs().get(i).setSequenceNumber(0);
+            }
+
         }
 
         if ((this._sigHashType & SigHashType.ANYONECANPAY.value) > 0) {

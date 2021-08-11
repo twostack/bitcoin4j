@@ -66,7 +66,7 @@ public class TransactionOutput {
         WriteUtils writer = new WriteUtils();
 
         //write satoshi value
-        writer.writeUint64LE(satoshis);
+        writer.writeInt64LE(satoshis.longValue());
 
         //write the locking script
         byte[] outputScript = _lockingScriptBuilder.getLockingScript().getProgram();

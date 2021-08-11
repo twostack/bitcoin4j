@@ -962,7 +962,7 @@ public class Interpreter {
                         break;
 
                     case OP_CHECKLOCKTIMEVERIFY:
-                        if (!verifyFlags.contains(VerifyFlag.CHECKLOCKTIMEVERIFY)) {
+                        if (!verifyFlags.contains(VerifyFlag.CHECKLOCKTIMEVERIFY) || verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS)) {
                             // not enabled; treat as a NOP2
                             if (verifyFlags.contains(VerifyFlag.DISCOURAGE_UPGRADABLE_NOPS)) {
                                 throw new ScriptException(ScriptError.SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS, "Script used a reserved opcode " + opcode);
@@ -973,7 +973,7 @@ public class Interpreter {
                         break;
 
                     case OP_CHECKSEQUENCEVERIFY:
-                        if (!verifyFlags.contains(VerifyFlag.CHECKSEQUENCEVERIFY)) {
+                        if (!verifyFlags.contains(VerifyFlag.CHECKSEQUENCEVERIFY) || verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS)) {
                             // not enabled; treat as a NOP3
                             if (verifyFlags.contains(VerifyFlag.DISCOURAGE_UPGRADABLE_NOPS)) {
                                 throw new ScriptException(ScriptError.SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS, "Script used a reserved opcode " + opcode);
@@ -1028,28 +1028,34 @@ public class Interpreter {
         if (nLockTime.compareTo(BigInteger.ZERO) < 0)
             throw new ScriptException(ScriptError.SCRIPT_ERR_NEGATIVE_LOCKTIME, "Negative locktime");
 
-        // There are two kinds of nLockTime, need to ensure we're comparing apples-to-apples
-        if (!(
-                ((txContainingThis.getLockTime() <  Transaction.LOCKTIME_THRESHOLD) && (nLockTime.compareTo(Transaction.LOCKTIME_THRESHOLD_BIG)) < 0) ||
-                        ((txContainingThis.getLockTime() >= Transaction.LOCKTIME_THRESHOLD) && (nLockTime.compareTo(Transaction.LOCKTIME_THRESHOLD_BIG)) >= 0))
-        )
+        // There are two kinds of nLockTime: lock-by-blockheight and
+        // lock-by-blocktime, distinguished by whether nLockTime <
+        // LOCKTIME_THRESHOLD.
+        //
+        // We want to compare apples to apples, so fail the script unless the type
+        // of nLockTime being tested is the same as the nLockTime in the
+        // transaction.
+        if (!(((txContainingThis.getLockTime() <  Transaction.LOCKTIME_THRESHOLD) &&
+                (nLockTime.compareTo(Transaction.LOCKTIME_THRESHOLD_BIG)) < 0) ||
+                        ((txContainingThis.getLockTime() >= Transaction.LOCKTIME_THRESHOLD) &&
+                                (nLockTime.compareTo(Transaction.LOCKTIME_THRESHOLD_BIG)) >= 0)) ) {
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Locktime requirement type mismatch");
+        }
 
-        // Now that we know we're comparing apples-to-apples, the
-        // comparison is a simple numeric one.
+        // Now that we know we're comparing apples-to-apples, the comparison is a
+        // simple numeric one.
         if (nLockTime.compareTo(BigInteger.valueOf(txContainingThis.getLockTime())) > 0)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Locktime requirement not satisfied");
+            throw new ScriptException(ScriptError.SCRIPT_ERR_NEGATIVE_LOCKTIME, "Negative locktime");
 
         // Finally the nLockTime feature can be disabled and thus
-        // CHECKLOCKTIMEVERIFY bypassed if every txin has been
-        // finalized by setting nSequence to maxint. The
-        // transaction would be allowed into the blockchain, making
-        // the opcode ineffective.
+        // CHECKLOCKTIMEVERIFY bypassed if every txin has been finalized by setting
+        // nSequence to maxint. The transaction would be allowed into the
+        // blockchain, making the opcode ineffective.
         //
-        // Testing if this vin is not final is sufficient to
-        // prevent this condition. Alternatively we could test all
-        // inputs, but testing just this input minimizes the data
-        // required to prove correct CHECKLOCKTIMEVERIFY execution.
+        // Testing if this vin is not final is sufficient to prevent this condition.
+        // Alternatively we could test all inputs, but testing just this input
+        // minimizes the data required to prove correct CHECKLOCKTIMEVERIFY
+        // execution.
         if (!txContainingThis.getInputs().get(index).isFinal())
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Transaction contains a final transaction input for a CHECKLOCKTIMEVERIFY script.");
     }
@@ -1207,14 +1213,7 @@ public class Interpreter {
             // TODO: Should check hash type is known
             SigHash sigHash = new SigHash();
 
-//            int sighashMode = sig.sigHashMode().value;
-//            if (sig.useForkId()) {
-//               sighashMode = sig.sigHashMode().value | SigHashType.FORKID.value;
-//            }
-
             byte[] hash = sigHash.createHash(txContainingThis, sig.sighashFlags, index, subScript, BigInteger.valueOf(value.value));
-            byte[] preimage = sigHash.getSighashPreimage(txContainingThis, sig.sighashFlags, index, subScript, BigInteger.valueOf(value.value));
-            byte[] hash2 = Sha256Hash.hashTwice(preimage);
             sigValid = ECKey.verify(hash, sig, pubKey);
 
         } catch (Exception e1) {

@@ -64,7 +64,6 @@ public class Transaction {
      */
     public Transaction(ByteBuffer buffer){
 
-        byte[] hash = Sha256Hash.hashTwice(buffer.array());
         parseBuffer(buffer);
     }
 

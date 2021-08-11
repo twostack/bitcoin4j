@@ -35,12 +35,15 @@ import org.twostack.bitcoin4j.exception.*;
 import org.twostack.bitcoin4j.params.NetworkType;
 import org.twostack.bitcoin4j.script.Interpreter;
 import org.twostack.bitcoin4j.script.Script;
+import org.twostack.bitcoin4j.script.ScriptException;
 
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.junit.Assert.*;
 import static org.twostack.bitcoin4j.Utils.HEX;
@@ -217,10 +220,10 @@ public class TransactionTest {
     }
 
 
-//    @Test
-//    public void svNodeValidTestVectors() throws Exception {
-//        dataDrivenValidTransactions("tx_valid_svnode.json");
-//    }
+    @Test
+    public void svNodeValidTestVectors() throws Exception {
+        dataDrivenValidTransactions("tx_valid_svnode.json");
+    }
 
     @Test
     public void bsvJsValidTestVectors() throws Exception {
@@ -242,13 +245,31 @@ public class TransactionTest {
                 Map<String, Script> scriptPubKeys = parseScriptPubKeys(test.get(0));
                 spendingTx = Transaction.fromHex(test.get(1).asText().toLowerCase());
                 spendingTx.verify();
-                Set<Script.VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
+
+                System.out.println(test.get(1).asText());
+
+                ///all this ceremony to extract Verify Flags
+                String flagString;
+                if (test.get(2).isArray()) {
+                    List<String> flagList = new ArrayList<>();
+                    for (Iterator<JsonNode> it = test.get(2).elements(); it.hasNext(); ) {
+                        String el = it.next().asText();
+                        flagList.add(el);
+                    }
+                    flagString = flagList.stream().map((el) -> el).collect(Collectors.joining(","));
+                }else{
+                    flagString = test.get(2).asText();
+                }
+
+                Set<Script.VerifyFlag> verifyFlags = parseVerifyFlags(flagString);
 
                 for (int i = 0; i < spendingTx.getInputs().size(); i++) {
                     TransactionInput input = spendingTx.getInputs().get(i);
                     if (input.getPrevTxnOutputIndex() == 0xffffffffL) {
                         input.setPrevTxnOutputIndex(-1);
                     }
+
+                    System.out.println("Spending INPUT : [" + i + "]");
 
                     //reconstruct the key into our Map of Public Keys using the details from
                     //the parsed transaction
@@ -261,8 +282,9 @@ public class TransactionTest {
                     Interpreter interp = new Interpreter();
                     interp.correctlySpends( input.getScriptSig(), scriptPubKeys.get(keyName), spendingTx, i , verifyFlags);
 
-                    System.out.println(test.get(0));
                     //TODO: Would be better to assert expectation that no exception is thrown ?
+                    //Ans: The whole of the Script Interpreter uses Exception-Handling for error-handling. So no,
+                    //     not without a deep refactor of the code.
                 }
             } catch (Exception e) {
                 System.err.println(test);
@@ -273,10 +295,10 @@ public class TransactionTest {
         }
     }
 
-//    @Test
-//    public void svNodeInValidTestVectors() throws Exception {
-//        dataDrivenInvalidTransactions("tx_invalid_svnode.json");
-//    }
+    @Test
+    public void svNodeInValidTestVectors() throws Exception {
+        dataDrivenInvalidTransactions("tx_invalid_svnode.json");
+    }
 
     @Test
     public void bsvJsInValidTestVectors() throws Exception {
@@ -289,13 +311,35 @@ public class TransactionTest {
             if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
                 continue;
 
-            Transaction spendingTx = null;
-
-            Map<String, Script> scriptPubKeys = parseScriptPubKeys(test.get(0));
-            spendingTx = Transaction.fromHex(test.get(1).asText().toLowerCase());
-            Set<Script.VerifyFlag> verifyFlags = parseVerifyFlags(test.get(2).asText());
+            System.out.println(test.get(0));
 
             boolean valid = true;
+            Transaction spendingTx = null;
+            Map<String, Script> scriptPubKeys = null;
+
+            try {
+                scriptPubKeys = parseScriptPubKeys(test.get(0));
+                spendingTx = Transaction.fromHex(test.get(1).asText().toLowerCase());
+            }catch(ScriptException ex){
+                continue;
+            }
+
+            ///all this ceremony to extract Verify Flags
+            String flagString;
+            if (test.get(2).isArray()) {
+                List<String> flagList = new ArrayList<>();
+                for (Iterator<JsonNode> it = test.get(2).elements(); it.hasNext(); ) {
+                    String el = it.next().asText();
+                    flagList.add(el);
+                }
+                flagString = flagList.stream().map((el) -> el).collect(Collectors.joining(","));
+            }else{
+                flagString = test.get(2).asText();
+            }
+
+            Set<Script.VerifyFlag> verifyFlags = parseVerifyFlags(flagString);
+
+
             try {
                 spendingTx.verify();
             } catch (VerificationException e) {
@@ -328,7 +372,6 @@ public class TransactionTest {
                 }
 
             }
-            System.out.println(test.get(0));
 
             if (valid)
                 fail();
