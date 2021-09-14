@@ -291,7 +291,17 @@ public class SigHash {
     }
 
 
-
+    /**
+     *
+     Concatenation of Funding-Transaction's TransactioID and the
+     index of the output we are spending. I.e.
+     PrevTxID+OutputIndex
+     This acts as a unique pointer to the UTXO we are spending from
+     *
+     * @param tx - Current Transaction we are building (Spending Transaction)
+     * @return Returns a double-sha256 hash value of the (TxID+OutputIndex) from the Funding Transaction
+     * @throws IOException
+     */
     private byte[] getPrevoutHash(Transaction tx) throws IOException {
         WriteUtils writer = new WriteUtils();
 
