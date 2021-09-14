@@ -40,8 +40,6 @@ import static org.twostack.bitcoin4j.Utils.HEX;
 import static org.twostack.bitcoin4j.script.ScriptOpCodes.*;
 import static com.google.common.base.Preconditions.*;
 
-// TODO: Redesign this entire API to be more type safe and organised.
-
 /**
  * <p>Programs embedded inside transactions that control redemption of payments.</p>
  *
@@ -194,7 +192,6 @@ public class Script {
         return chunks;
     }
 
-
     public Script(byte[] programBytes, long creationTimeSeconds) throws ScriptException {
         program = programBytes;
         parse(programBytes);
@@ -228,6 +225,17 @@ public class Script {
             return "<empty>";
         }
     }
+
+
+    public String toAsmString(){
+        if (!chunks.isEmpty()) {
+            List<String> asmStrings = chunks.stream().map(chunk -> chunk.toEncodedString(true)).collect(Collectors.toList());
+            return Utils.SPACE_JOINER.join(asmStrings);
+        } else {
+            return "";
+        }
+    }
+
 
     private static List<ScriptChunk> stringToChunks(String script) throws ScriptException{
 
@@ -631,26 +639,6 @@ public class Script {
     }
 
 
-
-    /*
-    SCRIPT_ERR_CLEANSTACK
-    bool CScript::IsPushOnly(const_iterator pc) const {
-    while (pc < end()) {
-        opcodetype opcode;
-        if (!GetOp(pc, opcode)) return false;
-        // Note that IsPushOnly() *does* consider OP_RESERVED to be a push-type
-        // opcode, however execution of OP_RESERVED fails, so it's not relevant
-        // to P2SH/BIP62 as the scriptSig would fail prior to the P2SH special
-        // validation code being executed.
-        if (opcode > OP_16) return false;
-    }
-    return true;
-}
-
-bool CScript::IsPushOnly() const {
-    return this->IsPushOnly(begin());
-}
-     */
     public static boolean isPushOnly(Script scriptSig) {
 
         List<ScriptChunk> chunks = scriptSig.getChunks();

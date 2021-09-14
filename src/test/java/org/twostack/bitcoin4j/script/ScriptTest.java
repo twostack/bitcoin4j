@@ -268,6 +268,33 @@ public class ScriptTest {
         assertEquals( "f4c03610e60ad15100929cc23da2f3a799af1725", HEX.encode(script.getChunks().get(2).data));
         assertEquals( ScriptOpCodes.OP_EQUALVERIFY, script.getChunks().get(3).opcode);
         assertEquals( ScriptOpCodes.OP_CHECKSIG, script.getChunks().get(4).opcode);
+
+    }
+
+    @Test
+    public void convertKnownAsm() throws IOException{
+        Script script = Script.fromAsmString("OP_DUP OP_HASH160 6fa5502ea094d59576898b490d866b32a61b89f6 OP_EQUALVERIFY OP_CHECKSIG");
+
+        assertEquals("OP_DUP OP_HASH160 6fa5502ea094d59576898b490d866b32a61b89f6 OP_EQUALVERIFY OP_CHECKSIG", script.toAsmString());
+    }
+
+
+    @Test
+    public void shouldHandleAsmFalse() {
+        String asm1 = "OP_FALSE";
+        String asm2 = "OP_0";
+        String asm3 = "0";
+        assertEquals(Script.fromAsmString(asm1).toAsmString(), asm3);
+        assertEquals(Script.fromAsmString(asm2).toAsmString(), asm3);
+        assertEquals(Script.fromAsmString(asm3).toAsmString(), asm3);
+    }
+
+    @Test
+    public void shouldHandleAsmNegate() {
+        String asm1 = "OP_1NEGATE";
+        String asm2 = "-1";
+        assertEquals(Script.fromAsmString(asm1).toAsmString(),asm2);
+        assertEquals(Script.fromAsmString(asm2).toAsmString(),asm2);
     }
 
     @Test
