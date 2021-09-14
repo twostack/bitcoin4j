@@ -36,7 +36,7 @@ public class ReadUtils {
         cursor = 0;
     }
 
-    protected long readUint32() throws ProtocolException {
+    public long readUint32() throws ProtocolException {
         try {
             long u = Utils.readUint32(payload, cursor);
             cursor += 4;
@@ -46,7 +46,7 @@ public class ReadUtils {
         }
     }
 
-    protected long readInt64() throws ProtocolException {
+    public long readInt64() throws ProtocolException {
         try {
             long u = Utils.readInt64(payload, cursor);
             cursor += 8;
@@ -56,16 +56,16 @@ public class ReadUtils {
         }
     }
 
-    protected BigInteger readUint64() throws ProtocolException {
+    public BigInteger readUint64() throws ProtocolException {
         // Java does not have an unsigned 64 bit type. So scrape it off the wire then flip.
         return new BigInteger(Utils.reverseBytes(readBytes(8)));
     }
 
-    protected VarInt readVarInt() throws ProtocolException {
+    public VarInt readVarInt() throws ProtocolException {
         return readVarInt(0);
     }
 
-    protected VarInt readVarInt(int offset) throws ProtocolException {
+    public VarInt readVarInt(int offset) throws ProtocolException {
         try {
             VarInt varint = new VarInt(payload, cursor + offset);
             cursor += offset + varint.getOriginalSizeInBytes();
