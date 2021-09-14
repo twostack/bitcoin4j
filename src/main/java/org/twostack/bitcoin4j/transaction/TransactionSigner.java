@@ -18,6 +18,7 @@ package org.twostack.bitcoin4j.transaction;
 
 import org.twostack.bitcoin4j.ECKey;
 import org.twostack.bitcoin4j.PrivateKey;
+import org.twostack.bitcoin4j.Sha256Hash;
 import org.twostack.bitcoin4j.exception.SigHashException;
 import org.twostack.bitcoin4j.exception.SignatureDecodeException;
 import org.twostack.bitcoin4j.exception.TransactionException;
@@ -25,8 +26,52 @@ import org.twostack.bitcoin4j.script.Script;
 
 import java.io.IOException;
 
+
 public class TransactionSigner {
 
+    private byte[] hash;
+    private byte[] preImage;
+    private Transaction signedTransaction;
+    private int sigHashType;
+    private TransactionSignature signature;
+
+    public byte[] getHash() {
+        return hash;
+    }
+
+    public Transaction getSignedTransaction() {
+        return signedTransaction;
+    }
+
+    public int getSigHashType() {
+        return sigHashType;
+    }
+
+    public TransactionSignature getSignature() {
+        return signature;
+    }
+
+    public byte[] getPreImage() {
+        return preImage;
+    }
+
+    /** Signs the provided transaction, and populates the corresponding input's
+     *  LockingScriptBuilder with the signature. Responsibility for what to
+     *  do with the Signature (populate appropriate template) is left to the
+     *  LockingScriptBuilder instance
+     *
+     *
+     * @param unsignedTxn  - Unsigned Transaction
+     * @param utxo - Funding transaction's Output to sign over
+     * @param inputIndex - Input of the current Transaction we are signing for
+     * @param signingKey - Private key to sign with
+     * @param sigHashType - Flags that govern which SigHash algorithm is applied
+     * @return Signed Transaction
+     * @throws TransactionException
+     * @throws IOException
+     * @throws SigHashException
+     * @throws SignatureDecodeException
+     */
     public Transaction sign(
             Transaction unsignedTxn,
             TransactionOutput utxo,
@@ -43,13 +88,16 @@ public class TransactionSigner {
         SigHash sigHash = new SigHash();
 
         //NOTE: Return hash in LittleEndian (already double-sha256 applied)
-        byte[] hash = sigHash.createHash(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
+        preImage = sigHash.getSighashPreimage(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
+        byte[] hash = Sha256Hash.hashTwice(preImage);
+//        byte[] hash = sigHash.createHash(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
 
         //FIXME: This kind of required round-tripping into the base class of TransactionSignature smells funny
         //       We should have a cleaner constructor for TransactionSignature
         byte[] signedBytes =  signingKey.sign(hash);
         ECKey.ECDSASignature ecSig = ECKey.ECDSASignature.decodeFromDER(signedBytes);
         TransactionSignature sig = new TransactionSignature(ecSig.r, ecSig.s, sigHashType);
+
 
         TransactionInput input = unsignedTxn.getInputs().get(inputIndex);
         UnlockingScriptBuilder scriptBuilder = input.getUnlockingScriptBuilder();
@@ -60,11 +108,16 @@ public class TransactionSigner {
             throw new TransactionException("Trying to sign a Transaction Input that is missing a SignedUnlockBuilder");
         }
 
+        this.hash = hash;
+        this.signedTransaction = unsignedTxn;
+        this.sigHashType = sigHashType;
+        this.signature = sig;
+
         return unsignedTxn; //signature has been added
     }
 
 
-    /** sf:> This seems like more Core buggery to me. What sort of TX remains valid without proper SighashType ???
+/** sf:> This seems like more Core buggery to me. What sort of TX remains valid without proper SighashType ???
      *
      * This is required for signatures which use a sigHashType which cannot be represented using SigHash and anyoneCanPay
      * See transaction c99c49da4c38af669dea436d3e73780dfdb6c1ecf9958baa52960e8baee30e73, which has sigHashType 0
