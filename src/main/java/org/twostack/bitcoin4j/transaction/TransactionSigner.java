@@ -89,15 +89,8 @@ public class TransactionSigner {
 
         //NOTE: Return hash in LittleEndian (already double-sha256 applied)
         preImage = sigHash.getSighashPreimage(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
-        byte[] hash = Sha256Hash.hashTwice(preImage);
-//        byte[] hash = sigHash.createHash(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
 
-        //FIXME: This kind of required round-tripping into the base class of TransactionSignature smells funny
-        //       We should have a cleaner constructor for TransactionSignature
-        byte[] signedBytes =  signingKey.sign(hash);
-        ECKey.ECDSASignature ecSig = ECKey.ECDSASignature.decodeFromDER(signedBytes);
-        TransactionSignature sig = new TransactionSignature(ecSig.r, ecSig.s, sigHashType);
-
+        TransactionSignature sig = signPreimage(signingKey, preImage, sigHashType);
 
         TransactionInput input = unsignedTxn.getInputs().get(inputIndex);
         UnlockingScriptBuilder scriptBuilder = input.getUnlockingScriptBuilder();
@@ -114,6 +107,17 @@ public class TransactionSigner {
         this.signature = sig;
 
         return unsignedTxn; //signature has been added
+    }
+
+    public TransactionSignature signPreimage(PrivateKey signingKey, byte[] preImage, int sigHashType) throws SignatureDecodeException {
+
+        byte[] hash = Sha256Hash.hashTwice(preImage);
+
+        //FIXME: This kind of required round-tripping into the base class of TransactionSignature smells funny
+        //       We should have a cleaner constructor for TransactionSignature
+        byte[] signedBytes =  signingKey.sign(hash);
+        ECKey.ECDSASignature ecSig = ECKey.ECDSASignature.decodeFromDER(signedBytes);
+        return new TransactionSignature(ecSig.r, ecSig.s, sigHashType);
     }
 
 
