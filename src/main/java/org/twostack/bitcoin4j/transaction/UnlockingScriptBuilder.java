@@ -29,11 +29,11 @@ public abstract class UnlockingScriptBuilder {
 
     protected Script script;
 
-    UnlockingScriptBuilder(Script script){
+    public UnlockingScriptBuilder(Script script){
         this.script = script;
     }
 
-    UnlockingScriptBuilder(){
+    public UnlockingScriptBuilder(){
         this.script = new ScriptBuilder().build();
     }
 
