@@ -173,7 +173,7 @@ public class LockUnlockBuilderTests {
         Transaction unsignedTxn = new TransactionBuilder()
                 .spendFromTransaction(txWithUTXO, 0, Transaction.NLOCKTIME_MAX_VALUE, unlocker) //set global sequenceNumber/nLocktime time for each Input created
                 .spendTo(locker, BigInteger.valueOf(50000000L)) //spend half of a bitcoin (we should have 1 in the UTXO)
-                .sendChangeTo(changeAddress, locker) // spend change to myself
+                .sendChangeTo(locker) // spend change to myself
                 .withFeePerKb(512)
                 .build(true);
 
@@ -319,7 +319,7 @@ public class LockUnlockBuilderTests {
                     BigInteger.valueOf(100000), 0,
                     unlockBuilder)
             .spendTo(new P2PKHLockBuilder(toAddress), BigInteger.valueOf(50000))
-            .sendChangeTo(changeAddress, new P2PKHLockBuilder(changeAddress))
+            .sendChangeTo(changeAddress)
             .withFeePerKb(512)
             .build(false);
 

@@ -128,7 +128,7 @@ public class TransactionTest {
         Transaction unsignedTxn = new TransactionBuilder()
          .spendFromTransaction(txWithUTXO, 0, Transaction.NLOCKTIME_MAX_VALUE, unlocker) //set global sequenceNumber/nLocktime time for each Input created
          .spendTo(locker, BigInteger.valueOf(50000000L)) //spend half of a bitcoin (we should have 1 in the UTXO)
-         .sendChangeTo(changeAddress, locker) // spend change to myself
+         .sendChangeTo(changeAddress) // spend change to myself
          .withFeePerKb(100000)
          .build(false);
 

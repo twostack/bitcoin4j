@@ -163,17 +163,17 @@ public class TransactionBuilder {
         return this;
     }
 
+    public TransactionBuilder sendChangeTo(Address changeAddress){
+        changeScriptBuilder = new P2PKHLockBuilder(changeAddress);
 
-    public TransactionBuilder sendChangeTo(Address changeAddress, @Nullable LockingScriptBuilder locker){
+        return sendChangeTo(changeScriptBuilder);
+    }
 
-        if (locker == null) {
-            changeScriptBuilder = new P2PKHLockBuilder(changeAddress);
-        }else{
-            changeScriptBuilder = locker;
-        }
+    public TransactionBuilder sendChangeTo(LockingScriptBuilder locker){
 
-        if (changeScriptBuilder != null)
-            updateChangeOutput();
+        changeScriptBuilder = locker;
+
+        updateChangeOutput();
 
         changeScriptFlag = true;
 
