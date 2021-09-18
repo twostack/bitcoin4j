@@ -163,12 +163,23 @@ public class TransactionBuilder {
         return this;
     }
 
+    /**
+     * Bitcoin Address Where to send any change (lefover satoshis after fees) to
+     * @param changeAddress - Bitcoin Address. Implicitly creates a P2PKH output.
+     * @return TransactionBuilder
+     */
     public TransactionBuilder sendChangeTo(Address changeAddress){
         changeScriptBuilder = new P2PKHLockBuilder(changeAddress);
 
         return sendChangeTo(changeScriptBuilder);
     }
 
+    /**
+     * A flexible way of dictating how to lock up any change output.
+     *
+     * @param locker - a LockingScriptBuilder instance
+     * @return TransactionBuilder
+     */
     public TransactionBuilder sendChangeTo(LockingScriptBuilder locker){
 
         changeScriptBuilder = locker;
