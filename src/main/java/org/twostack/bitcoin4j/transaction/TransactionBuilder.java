@@ -36,7 +36,8 @@ public class TransactionBuilder {
 
     private LockingScriptBuilder changeScriptBuilder;
     private BigInteger changeAmount = BigInteger.ZERO;
-    private TransactionOutput changeOutput;
+
+    public TransactionOutput changeOutput;
 
     private final long DEFAULT_FEE_PER_KB = 512; //amount in satoshis
 
