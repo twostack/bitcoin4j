@@ -148,8 +148,8 @@ public class TransactionBuilder {
     public TransactionBuilder spendTo(LockingScriptBuilder locker, BigInteger satoshis) throws TransactionException{
 
         int satoshiCompare = satoshis.compareTo(BigInteger.ZERO);
-        if (satoshiCompare == -1 ||  satoshiCompare == 0) //equivalent of satoshis <= 0
-            throw new TransactionException("You can only spend a positive amount of satoshis");
+        if (satoshiCompare == -1 ) //equivalent of satoshis < 0
+            throw new TransactionException("You can only spend zero or more satoshis in an output");
 
         Script script;
         if (locker == null) {
