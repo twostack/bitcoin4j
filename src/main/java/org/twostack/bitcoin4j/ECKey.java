@@ -166,6 +166,8 @@ public class ECKey {
     /**
      * Generates an entirely new keypair with the given {@link SecureRandom} object. Point compression is used so the
      * resulting public key will be 33 bytes (32 for the co-ordinate and 1 byte to represent the y bit).
+     *
+     * @param secureRandom Cryptographically secure random number generator
      */
     public ECKey(SecureRandom secureRandom) {
         ECKeyPairGenerator generator = new ECKeyPairGenerator();
@@ -199,6 +201,9 @@ public class ECKey {
     /**
      * Utility for compressing an elliptic curve point. Returns the same point if it's already compressed.
      * See the ECKey class docs for a discussion of point compression.
+     *
+     * @param point A point on the elliptic curve
+     * @return A point on the elliptic curve that is in compressed format
      */
     public static LazyECPoint compressPoint(LazyECPoint point) {
         return point.isCompressed() ? point : getPointWithCompression(point.get(), true);
@@ -207,11 +212,22 @@ public class ECKey {
     /**
      * Utility for decompressing an elliptic curve point. Returns the same point if it's already uncompressed.
      * See the ECKey class docs for a discussion of point compression.
+     *
+     * @param point A point on the elliptic curve
+     * @return A point on the elliptic curve that is in uncompressed format
      */
     public static LazyECPoint decompressPoint(LazyECPoint point) {
         return !point.isCompressed() ? point : getPointWithCompression(point.get(), false);
     }
 
+    /**
+     * Transforms a point on the elliptic curve. The point will either be compressed or
+     * decompressed
+     *
+     * @param point A point on the elliptic curve
+     * @param compressed A flag that indicates whether the returned point should be in compressed format or not.
+     * @return A point on the elliptic curve that is either compressed or uncompressed depending on the compressed flag
+     */
     private static LazyECPoint getPointWithCompression(ECPoint point, boolean compressed) {
         return new LazyECPoint(point, compressed);
     }
@@ -219,6 +235,9 @@ public class ECKey {
     /**
      * Construct an ECKey from an ASN.1 encoded private key. These are produced by OpenSSL and stored by Bitcoin
      * Core in its wallet. Note that this is slow because it requires an EC point multiply.
+     *
+     * @param asn1privkey An ASN.1 encoded private key
+     * @return an ECKey instance
      */
     public static ECKey fromASN1(byte[] asn1privkey) {
         return extractKeyFromASN1(asn1privkey);
@@ -227,6 +246,10 @@ public class ECKey {
     /**
      * Creates an ECKey given the private key only. The public key is calculated from it (this is slow). The resulting
      * public key is compressed.
+     *
+     * @param privKey An ECDSA private key
+     * @return an ECKey instance
+     *
      */
     public static ECKey fromPrivate(BigInteger privKey) {
         return fromPrivate(privKey, true);
@@ -234,7 +257,9 @@ public class ECKey {
 
     /**
      * Creates an ECKey given the private key only. The public key is calculated from it (this is slow).
+     *
      * @param compressed Determines whether the resulting ECKey will use a compressed encoding for the public key.
+     * @return an ECKey instance
      */
     public static ECKey fromPrivate(BigInteger privKey, boolean compressed) {
         ECPoint point = publicPointFromPrivate(privKey);
@@ -244,6 +269,9 @@ public class ECKey {
     /**
      * Creates an ECKey given the private key only. The public key is calculated from it (this is slow). The resulting
      * public key is compressed.
+     *
+     * @param privKeyBytes a byte array representing a private key
+     * @return an ECKey instance
      */
     public static ECKey fromPrivate(byte[] privKeyBytes) {
         return fromPrivate(new BigInteger(1, privKeyBytes));
@@ -252,6 +280,9 @@ public class ECKey {
     /**
      * Creates an ECKey given the private key only. The public key is calculated from it (this is slow).
      * @param compressed Determines whether the resulting ECKey will use a compressed encoding for the public key.
+     *
+     * @param privKeyBytes a byte array representing a private key
+     * @return an ECKey instance
      */
     public static ECKey fromPrivate(byte[] privKeyBytes, boolean compressed) {
         return fromPrivate(new BigInteger(1, privKeyBytes), compressed);
@@ -261,7 +292,11 @@ public class ECKey {
      * Creates an ECKey that simply trusts the caller to ensure that point is really the result of multiplying the
      * generator point by the private key. This is used to speed things up when you know you have the right values
      * already.
+     *
+     * @param priv a private key
+     * @param pub a public key
      * @param compressed Determines whether the resulting ECKey will use a compressed encoding for the public key.
+     * @return an ECKey instance
      */
     public static ECKey fromPrivateAndPrecalculatedPublic(BigInteger priv, ECPoint pub, boolean compressed) {
         return new ECKey(priv, pub, compressed);
@@ -271,6 +306,10 @@ public class ECKey {
      * Creates an ECKey that simply trusts the caller to ensure that point is really the result of multiplying the
      * generator point by the private key. This is used to speed things up when you know you have the right values
      * already. The compression state of the point will be preserved.
+     *
+     * @param priv a private key
+     * @param pub a public key corresponding to the private key
+     * @return an ECKey instance
      */
     public static ECKey fromPrivateAndPrecalculatedPublic(byte[] priv, byte[] pub) {
         checkNotNull(priv);
@@ -280,7 +319,10 @@ public class ECKey {
 
     /**
      * Creates an ECKey that cannot be used for signing, only verifying signatures, from the given point.
+     *
+     * @param pub an elliptic curve point representing a public key
      * @param compressed Determines whether the resulting ECKey will use a compressed encoding for the public key.
+     * @return the private key as an ECKey instance
      */
     public static ECKey fromPublicOnly(ECPoint pub, boolean compressed) {
         return new ECKey(null, pub, compressed);
@@ -289,6 +331,9 @@ public class ECKey {
     /**
      * Creates an ECKey that cannot be used for signing, only verifying signatures, from the given encoded point.
      * The compression state of pub will be preserved.
+     *
+     * @param pub a public key
+     * @return an ECKey instance
      */
     public static ECKey fromPublicOnly(byte[] pub) {
         return new ECKey(null, new LazyECPoint(CURVE.getCurve(), pub));
@@ -301,6 +346,8 @@ public class ECKey {
     /**
      * Returns a copy of this key, but with the public point represented in uncompressed form. Normally you would
      * never need this: it's for specialised scenarios or when backwards compatibility in encoded form is necessary.
+     *
+     * @return an ECKey instance with an uncompressed public key point
      */
     public ECKey decompress() {
         if (!pub.isCompressed())
@@ -313,6 +360,9 @@ public class ECKey {
      * Creates an ECKey given only the private key bytes. This is the same as using the BigInteger constructor, but
      * is more convenient if you are importing a key from elsewhere. The public key will be automatically derived
      * from the private key.
+     *
+     * @param privKeyBytes - The ECDSA private key as byte array
+     * @param pubKey - The ECDSA public key as a byte array
      */
     @Deprecated
     public ECKey(@Nullable byte[] privKeyBytes, @Nullable byte[] pubKey) {
@@ -325,6 +375,8 @@ public class ECKey {
      * is supplied, the public key will be calculated from it (this is slow). If both are supplied, it's assumed
      * the public key already correctly matches the private key. If only the public key is supplied, this ECKey cannot
      * be used for signing.
+     * @param privKey - The ECDSA private key as byte array
+     * @param pubKey - The ECDSA public key as a byte array
      * @param compressed If set to true and pubKey is null, the derived public key will be in compressed form.
      */
     @Deprecated
