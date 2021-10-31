@@ -132,6 +132,8 @@ public class LegacyAddress extends Address {
      *             if the given base58 doesn't parse or the checksum is invalid
      * @throws AddressFormatException.WrongNetwork
      *             if the given address is valid but for a different chain (eg testnet vs mainnet)
+     *
+     * @return a LegacyAddress instance conforming to the provided {@link NetworkType}
      */
     public static LegacyAddress fromBase58(@Nullable NetworkType networkType, String base58)
             throws AddressFormatException {
@@ -205,6 +207,8 @@ public class LegacyAddress extends Address {
      * Given an address, examines the version byte and attempts to find a matching NetworkParameters. If you aren't sure
      * which network the address is intended for (eg, it was provided by a user), you can use this to decide if it is
      * compatible with the current wallet.
+     *
+     * @param address the base58-encoded bitcoin address from which to construct the {@link NetworkAddressType}
      *
      * @return network the address is valid for
      * @throws AddressFormatException if the given base58 doesn't parse or the checksum is invalid

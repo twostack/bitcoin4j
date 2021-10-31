@@ -169,7 +169,7 @@ public class Base58 {
      *
      * @param input the base58-encoded string to decode (which should include the checksum)
      * @throws AddressFormatException if the input is not base 58 or the checksum does not validate.
-     * @return
+     * @return the original data bytes as a byte array
      */
     public static byte[] decodeChecked(String input) throws AddressFormatException {
         byte[] decoded  = decode(input);
