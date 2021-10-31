@@ -180,6 +180,10 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
     /**
      * Calculates the hash of hash on the given chunks of bytes. This is equivalent to concatenating the two
      * chunks and then passing the result to {@link #hashTwice(byte[])}.
+     *
+     * @param input1 the left-hand-side of the concatentation
+     * @param input2 the right-hand-side of the concatenation
+     * @return a double-sha256 hash
      */
     public static byte[] hashTwice(byte[] input1, byte[] input2) {
         MessageDigest digest = newDigest();
@@ -206,6 +210,14 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
     /**
      * Calculates the hash of hash on the given byte ranges. This is equivalent to
      * concatenating the two ranges and then passing the result to {@link #hashTwice(byte[])}.
+     *
+     * @param input1 the left-hand-side of the concatenation
+     * @param offset1 the starting position of the LHS of concatenation
+     * @param length1 the total number of bytes in the range of the LHS
+     * @param input2 the righ-hand-side of the concatenation
+     * @param offset2 the starting position of the RHS of concatenation
+     * @param length2 the total number of bytes in the range of the RHS
+     * @return the double-hash (in big-endian order)
      */
     public static byte[] hashTwice(byte[] input1, int offset1, int length1,
                                    byte[] input2, int offset2, int length2) {
@@ -239,21 +251,21 @@ public class Sha256Hash implements Serializable, Comparable<Sha256Hash> {
     }
 
     /**
-     * Returns the bytes interpreted as a positive integer.
+     * @return the bytes interpreted as a positive integer.
      */
     public BigInteger toBigInteger() {
         return new BigInteger(1, bytes);
     }
 
     /**
-     * Returns the internal byte array, without defensively copying. Therefore do NOT modify the returned array.
+     * @return the internal byte array, without defensively copying. Therefore do NOT modify the returned array.
      */
     public byte[] getBytes() {
         return bytes;
     }
 
     /**
-     * Returns a reversed copy of the internal byte array.
+     * @return a reversed copy of the internal byte array.
      */
     public byte[] getReversedBytes() {
         return Utils.reverseBytes(bytes);

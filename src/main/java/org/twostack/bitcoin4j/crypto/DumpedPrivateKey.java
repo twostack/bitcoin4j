@@ -45,6 +45,8 @@ public class DumpedPrivateKey extends PrefixedChecksummedBytes {
      *             if the given base58 doesn't parse or the checksum is invalid
      * @throws AddressFormatException.WrongNetwork
      *             if the given private key is valid but for a different chain (eg testnet vs mainnet)
+     *
+     * @return a private key
      */
     public static DumpedPrivateKey fromBase58(@Nullable NetworkType networkType, String base58)
             throws AddressFormatException, AddressFormatException.WrongNetwork {
@@ -98,14 +100,14 @@ public class DumpedPrivateKey extends PrefixedChecksummedBytes {
     }
 
     /**
-     * Returns an ECKey created from this encoded private key.
+     * @return an ECKey created from this encoded private key.
      */
     public ECKey getKey() {
         return ECKey.fromPrivate(Arrays.copyOf(bytes, 32), isPubKeyCompressed());
     }
 
     /**
-     * Returns true if the public key corresponding to this private key is compressed.
+     * @return true if the public key corresponding to this private key is compressed.
      */
     public boolean isPubKeyCompressed() {
         return bytes.length == 33 && bytes[32] == 1;
