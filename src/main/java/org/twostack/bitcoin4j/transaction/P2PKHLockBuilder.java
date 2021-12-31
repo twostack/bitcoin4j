@@ -58,10 +58,6 @@ public class P2PKHLockBuilder extends LockingScriptBuilder{
                 throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR,"Wrong number of data elements for P2PKH ScriptPubkey");
             }
 
-            if (chunkList.get(2).size() != 20 ){
-                throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Signature and Public Key values are malformed");
-            }
-
             if(!(   chunkList.get(0).opcode == ScriptOpCodes.OP_DUP &&
                     chunkList.get(1).opcode == ScriptOpCodes.OP_HASH160 &&
                     chunkList.get(3).opcode == ScriptOpCodes.OP_EQUALVERIFY &&
