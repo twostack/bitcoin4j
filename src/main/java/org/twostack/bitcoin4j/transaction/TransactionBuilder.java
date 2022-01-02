@@ -17,6 +17,7 @@
 package org.twostack.bitcoin4j.transaction;
 
 import org.twostack.bitcoin4j.Address;
+import org.twostack.bitcoin4j.Utils;
 import org.twostack.bitcoin4j.exception.TransactionException;
 import org.twostack.bitcoin4j.script.Script;
 
@@ -101,7 +102,7 @@ public class TransactionBuilder {
     public TransactionBuilder spendFromTransaction(Transaction txn, int outputIndex, long sequenceNumber, UnlockingScriptBuilder unlocker){
 
         TransactionInput input = new TransactionInput(
-                txn.getTransactionIdBytes(),
+                Utils.reverseBytes(txn.getTransactionIdBytes()),
                 outputIndex,
                 sequenceNumber,
                 unlocker
@@ -399,7 +400,7 @@ public class TransactionBuilder {
         return changeOutput;
     }
 
-    private BigInteger calculateChange(){
+    public BigInteger calculateChange(){
         BigInteger inputAmount = calcInputTotals();
         BigInteger outputAmount = calcRecipientTotals();
         BigInteger unspent = inputAmount.subtract(outputAmount);
@@ -407,7 +408,7 @@ public class TransactionBuilder {
         return unspent.subtract(getFee()); //sub
     }
 
-    private BigInteger getFee(){
+    public BigInteger getFee(){
 
         if (transactionFee != null){
             return transactionFee;
@@ -437,7 +438,7 @@ public class TransactionBuilder {
         return fee;
     }
 
-    private long estimateSize(){
+    public long estimateSize(){
         int result = MAXIMUM_EXTRA_SIZE;
 
         for (TransactionInput input: inputs){
@@ -451,7 +452,7 @@ public class TransactionBuilder {
         return result;
     }
 
-    private BigInteger calcInputTotals(){
+    public BigInteger calcInputTotals(){
 
         BigInteger amount = BigInteger.ZERO;
         for (BigInteger value : spendingMap.values()) {
@@ -461,7 +462,7 @@ public class TransactionBuilder {
         return amount;
     }
 
-    private BigInteger calcRecipientTotals() {
+    public BigInteger calcRecipientTotals() {
 
         BigInteger amount = BigInteger.ZERO;
         for (TransactionOutput output: outputs) {

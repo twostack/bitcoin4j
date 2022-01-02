@@ -64,8 +64,8 @@ public class P2PKHDataLockBuilder extends LockingScriptBuilder{
 
             List<ScriptChunk> chunkList = script.getChunks();
 
-            if (chunkList.size() != 8 && chunkList.size() != 7 ){
-                throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR,"Wrong number of data elements for locking script");
+            if (!chunkList.get(0).isPushData() && chunkList.get(1).opcode != OP_DROP){
+                throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR,"Script must start with PUSHDATA & DROP instruction.");
             }
 
             int chunkListOffset = 0;
