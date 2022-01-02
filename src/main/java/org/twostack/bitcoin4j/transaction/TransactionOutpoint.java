@@ -20,6 +20,7 @@ package org.twostack.bitcoin4j.transaction;
 import org.twostack.bitcoin4j.script.Script;
 
 import java.math.BigInteger;
+import java.util.Objects;
 
 /**
  * This is more traditionally referred to as a UTXO. The Transaction Outpoint is a convenience
@@ -65,5 +66,18 @@ public class TransactionOutpoint {
 
     public void setLockingScript(Script lockingScript) {
         this.lockingScript = lockingScript;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        TransactionOutpoint outpoint = (TransactionOutpoint) o;
+        return transactionId.equals(outpoint.transactionId) && outputIndex.equals(outpoint.outputIndex) && satoshis.equals(outpoint.satoshis) && Objects.equals(lockingScript, outpoint.lockingScript);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(transactionId, outputIndex, satoshis, lockingScript);
     }
 }
