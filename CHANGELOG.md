@@ -1,3 +1,48 @@
+# Release 1.5.5
+Made constructors public so to allow outside-package subclassing
+
+Locking script & tx spending fixes:
+- The spendFromTransaction() fundion in TransactionBuilder was using the
+  incorrect endian encoding the for the transactionID. Fixed.
+- The P2PKHDataLockBuilder had a broken means for validating
+  the script template. fixed.
+- Added hashcode and equals to TransactionOutpoint so it can used in
+  collections
+
+P2PKH Bugfix in template check
+
+Javadoc fixes: 
+- Fixed javadocs for sha256 utility
+- Fixed javadocs for private key crypto
+- Fixed up ECKey constructor javadocs
+- Fixed javadocs for Monetary
+- Fixed javadocs for base58 encoder
+- Fixed javadocs for legacy addresses
+- Added javadoc entries for TransactionBuilder
+
+Allow zero-satoshi outputs for OP_RETURN data
+expose the Change Output of the Builder
+
+Refactored change API in TransactionBuilder
+
+- setting change in the TransactionBuilder is split into
+  implicit P2PKH when address is provided and explicit
+  locking script builder.
+
+Factored out pre-image signing
+
+Added local state to TransactionSigner:
+- Not the most elegant solution. Ideally the sign() method should return
+  structured data with actual signature information.
+  Instead, to not break the API for this method the internal state of the
+  class now reflects additional data after signing.
+
+added documentation for getPrevoutsHash() because it's non-obvious from name
+
+Made public some previously protected byte array reader methods
+
+Added toAsmString() method
+
 # Release 1.5.0
 
 ### New Features
