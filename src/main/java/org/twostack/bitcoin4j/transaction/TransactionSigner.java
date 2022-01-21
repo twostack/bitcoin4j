@@ -34,6 +34,8 @@ public class TransactionSigner {
     private Transaction signedTransaction;
     private int sigHashType;
     private TransactionSignature signature;
+    private PrivateKey signingKey;
+
 
     public byte[] getHash() {
         return hash;
@@ -53,6 +55,52 @@ public class TransactionSigner {
 
     public byte[] getPreImage() {
         return preImage;
+    }
+
+    /** Constructs a new instance of the TransactionSigner.
+     * NOTE: The SigHashType for signing will default to a value of
+     *       (SigHashType.ALL.value | SigHashType.FORKID.value)
+     */
+//     TransactionSigner(){
+//        this.sigHashType = SigHashType.ALL.value | SigHashType.FORKID.value;
+//    }
+
+    /** Constructs a new instance of the TransactionSigner.
+     * NOTE: The SigHashType for signing will default to a value of
+     *       (SigHashType.ALL.value | SigHashType.FORKID.value)
+     *
+     * @param sigHashType - Flags that govern which SigHash algorithm to use during signature generation
+     */
+    TransactionSigner(int sigHashType, PrivateKey signingKey){
+        this.sigHashType = sigHashType;
+        this.signingKey = signingKey;
+    }
+
+    /** Signs the provided transaction, and populates the corresponding input's
+     *  LockingScriptBuilder with the signature. Responsibility for what to
+     *  do with the Signature (populate appropriate template) is left to the
+     *  LockingScriptBuilder instance.
+     *
+     *  NOTE: This invocation will use the SigHashType set as part of the
+     *  constructor invocation. If the default constructor is invoked then
+     *  the SigHashType defaults to (SigHashType.ALL.value | SigHashType.FORKID.value) :
+     *
+     *
+     * @param unsignedTxn  - Unsigned Transaction
+     * @param utxo - Funding transaction's Output to sign over
+     * @param inputIndex - Input of the current Transaction we are signing for
+     * @return Signed Transaction
+     * @throws TransactionException
+     * @throws IOException
+     * @throws SigHashException
+     * @throws SignatureDecodeException
+     */
+    public Transaction sign(
+            Transaction unsignedTxn,
+            TransactionOutput utxo,
+            int inputIndex) throws TransactionException, IOException, SigHashException, SignatureDecodeException {
+
+        return this.sign(unsignedTxn, utxo, inputIndex, signingKey, sigHashType);
     }
 
     /** Signs the provided transaction, and populates the corresponding input's
@@ -118,6 +166,14 @@ public class TransactionSigner {
         byte[] signedBytes =  signingKey.sign(hash);
         ECKey.ECDSASignature ecSig = ECKey.ECDSASignature.decodeFromDER(signedBytes);
         return new TransactionSignature(ecSig.r, ecSig.s, sigHashType);
+    }
+
+    public PrivateKey getSigningKey() {
+        return signingKey;
+    }
+
+    public void setSigningKey (PrivateKey privateKey) {
+        this.signingKey = privateKey;
     }
 
 

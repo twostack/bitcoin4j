@@ -159,7 +159,7 @@ public class LockUnlockBuilderTests {
     }
 
     @Test
-    public void canUseP2PKInTransactionBuilder() throws InvalidKeyException, TransactionException {
+    public void canUseP2PKInTransactionBuilder() throws InvalidKeyException, TransactionException, SigHashException, SignatureDecodeException, IOException {
 
         //Create a Transaction instance from the RAW transaction data create by bitcoin-cli.
         //this transaction contains the UTXO we are interested in
@@ -181,7 +181,8 @@ public class LockUnlockBuilderTests {
 
         //simply check that we have clean e2e execution
         Assertions.assertThatCode(() -> {
-            new TransactionSigner().sign(unsignedTxn, utxoToSign,0, privateKey, SigHashType.ALL.value | SigHashType.FORKID.value);
+            TransactionSigner signer = new TransactionSigner( SigHashType.ALL.value | SigHashType.FORKID.value, privateKey);
+            signer.sign(unsignedTxn, utxoToSign,0);
         }).doesNotThrowAnyException();
     }
 
@@ -323,10 +324,11 @@ public class LockUnlockBuilderTests {
             .withFeePerKb(512)
             .build(false);
 
-        TransactionSigner signer = new TransactionSigner();
+        TransactionSigner signer1 = new TransactionSigner(SigHashType.ALL.value | SigHashType.FORKID.value, private1 );
+        TransactionSigner signer2 = new TransactionSigner(SigHashType.ALL.value | SigHashType.FORKID.value, private2 );
         TransactionOutput utxo = new TransactionOutput(BigInteger.valueOf(100000), lockBuilder);
-        signer.sign(tx, utxo, 0, private1, SigHashType.ALL.value | SigHashType.FORKID.value);
-        signer.sign(tx, utxo, 0, private2, SigHashType.ALL.value | SigHashType.FORKID.value);
+        signer1.sign(tx, utxo, 0);
+        signer2.sign(tx, utxo, 0);
 
         assertEquals(2, unlockBuilder.getSignatures().size() );
 

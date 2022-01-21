@@ -18,12 +18,16 @@ package org.twostack.bitcoin4j.transaction;
 
 import org.twostack.bitcoin4j.Address;
 import org.twostack.bitcoin4j.Utils;
+import org.twostack.bitcoin4j.exception.SigHashException;
+import org.twostack.bitcoin4j.exception.SignatureDecodeException;
 import org.twostack.bitcoin4j.exception.TransactionException;
 import org.twostack.bitcoin4j.script.Script;
 
 import javax.annotation.Nullable;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.util.*;
+import java.util.stream.Stream;
 
 import static org.twostack.bitcoin4j.Utils.HEX;
 
@@ -63,6 +67,29 @@ public class TransactionBuilder {
 
     private long nLockTime = 0;
 
+    private HashMap<String, SignerDto> signerMap = new HashMap();
+
+
+    private class SignerDto{
+        private TransactionSigner signer;
+        private TransactionOutpoint outpoint;
+
+        private SignerDto(){}
+
+        SignerDto(TransactionSigner signer, TransactionOutpoint outpoint){
+            this.signer = signer;
+            this.outpoint = outpoint;
+        }
+
+        public TransactionSigner getSigner() {
+            return signer;
+        }
+
+        public TransactionOutpoint getOutpoint() {
+            return outpoint;
+        }
+    }
+
     /*
         utxoMap is expected to have :
 
@@ -97,6 +124,36 @@ public class TransactionBuilder {
 
         return this;
 
+    }
+
+    public TransactionBuilder spendFromTransaction(TransactionSigner signer, Transaction txn, int outputIndex, long sequenceNumber, UnlockingScriptBuilder unlocker){
+
+        //save the transactionId. This is expensive operation which serialises the Tx.
+        String transactionId = txn.getTransactionId();
+
+        //construct the data to save to signerMap
+        TransactionOutput output = txn.getOutputs().get(outputIndex);
+
+        TransactionOutpoint outpoint = new TransactionOutpoint();
+        outpoint.setOutputIndex(outputIndex);
+        outpoint.setLockingScript(output.getScript());
+        outpoint.setSatoshis(output.getAmount());
+        outpoint.setTransactionId(transactionId);
+
+        this.signerMap.put(transactionId, new SignerDto(signer, outpoint));
+
+        //update the spending transactionInput
+        TransactionInput input = new TransactionInput(
+                Utils.reverseBytes(txn.getTransactionIdBytes()),
+                outputIndex,
+                sequenceNumber,
+                unlocker
+        );
+
+        spendingMap.put(transactionId, txn.getOutputs().get(outputIndex).getAmount());
+
+        inputs.add(input);
+        return this;
     }
 
     public TransactionBuilder spendFromTransaction(Transaction txn, int outputIndex, long sequenceNumber, UnlockingScriptBuilder unlocker){
@@ -264,7 +321,8 @@ public class TransactionBuilder {
     }
      */
 
-    public Transaction build(boolean performChecks) throws TransactionException {
+
+    public Transaction build(boolean performChecks) throws TransactionException, IOException, SigHashException, SignatureDecodeException {
         if (performChecks){
             runTransactionChecks();
         }
@@ -276,6 +334,30 @@ public class TransactionBuilder {
 
         //add transaction outputs
         tx.addOutputs(outputs);
+
+        //update inputs with signatures
+        String txId = tx.getTransactionId();
+        for (int index = 0; index < inputs.size() ; index++) {
+            TransactionInput currentInput = inputs.get(index);
+
+            Optional<Map.Entry<String, SignerDto>> result = signerMap.entrySet().stream().filter( (Map.Entry<String, SignerDto> entry) -> {
+                //drop everything from stream except what we're looking for
+                return !(entry.getValue().outpoint.getTransactionId() == HEX.encode(currentInput.getPrevTxnId()) &&
+                        entry.getValue().outpoint.getOutputIndex() == currentInput.getPrevTxnOutputIndex());
+            }).findFirst();
+
+            if (result.isPresent()) {
+
+                SignerDto dto = result.get().getValue();
+                TransactionOutput utxoToSpend = new TransactionOutput(dto.outpoint.getSatoshis(), dto.outpoint.getLockingScript());
+
+                //TODO: this side-effect programming where the signer mutates my local variable
+                //      still bothers me.
+                dto.signer.sign(tx, utxoToSpend, index);
+            }
+        }
+
+
 
         if (changeScriptBuilder != null) {
             tx.addOutput(getChangeOutput());
