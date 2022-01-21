@@ -1,3 +1,8 @@
+#Release 1.6.2
+### Foot-in-mouth release
+
+I forgot to make the TransactionSigner's constructor public. *facepalm*. 
+
 #Release 1.6.1
 ### TransactionBuilder Signature API Completion
 
