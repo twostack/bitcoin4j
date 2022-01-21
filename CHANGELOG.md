@@ -1,3 +1,18 @@
+#Release 1.6.0
+### TransactionBuilder Signature generation refactor
+
+Transaction building suffered from a rather pernicious problem  
+wherein it becomes hard/complicated to calculate fees.  
+This stems from the fact that when you try to large number of  
+utxos, the consequent large number of inputs in the spending tx  
+leads to guesswork about the appropriate fee calculation.  
+
+This update refactors the process of Transaction Signing so that  
+the builder can directly generate the signed inputs and therefore  
+perform the work of fee calculation internally.  
+
+Please see the transaction/TransactionBuilderTest.java for an example use.  
+
 # Release 1.5.5
 Made constructors public so to allow outside-package subclassing
 
