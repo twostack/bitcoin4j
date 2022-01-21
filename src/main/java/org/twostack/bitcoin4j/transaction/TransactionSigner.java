@@ -71,7 +71,7 @@ public class TransactionSigner {
      *
      * @param sigHashType - Flags that govern which SigHash algorithm to use during signature generation
      */
-    TransactionSigner(int sigHashType, PrivateKey signingKey){
+    public TransactionSigner(int sigHashType, PrivateKey signingKey){
         this.sigHashType = sigHashType;
         this.signingKey = signingKey;
     }
