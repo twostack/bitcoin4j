@@ -78,7 +78,7 @@ public class TransactionTest {
     }
 
     @Test
-    public void canCreateAndSignTransactionWithoutChange() throws InvalidKeyException, TransactionException, IOException, SigHashException {
+    public void canCreateAndSignTransactionWithoutChange() throws InvalidKeyException, TransactionException, IOException, SigHashException, SignatureDecodeException {
 
         PrivateKey privateKey = PrivateKey.fromWIF("cVVvUsNHhbrgd7aW3gnuGo2qJM45LhHhTCVXrDSJDDcNGE6qmyCs");
         Address changeAddress = Address.fromString(NetworkType.TEST, "mu4DpTaD75nheE4z5CQazqm1ivej1vzL4L"); // my address
@@ -103,14 +103,15 @@ public class TransactionTest {
 
         //simply check that we have clean e2e execution
         Assertions.assertThatCode(() -> {
-            new TransactionSigner().sign(unsignedTxn, utxoToSign,0, privateKey, SigHashType.ALL.value | SigHashType.FORKID.value);
+            TransactionSigner signer = new TransactionSigner(SigHashType.ALL.value | SigHashType.FORKID.value, privateKey);
+            signer.sign(unsignedTxn, utxoToSign,0);
         }).doesNotThrowAnyException();
 
         //System.out.println(HEX.encode(signedTx.serialize()));
     }
 
     @Test
-    public void can_create_and_sign_transaction() throws InvalidKeyException, TransactionException, IOException, SigHashException {
+    public void can_create_and_sign_transaction() throws InvalidKeyException, TransactionException, IOException, SigHashException, SignatureDecodeException {
 
         PrivateKey privateKey = PrivateKey.fromWIF("cVVvUsNHhbrgd7aW3gnuGo2qJM45LhHhTCVXrDSJDDcNGE6qmyCs");
         Address changeAddress = Address.fromString(NetworkType.TEST, "mu4DpTaD75nheE4z5CQazqm1ivej1vzL4L"); // my address
@@ -136,7 +137,8 @@ public class TransactionTest {
 
          //simply check that we have clean e2e execution
          Assertions.assertThatCode(() -> {
-             new TransactionSigner().sign(unsignedTxn, utxoToSign,0, privateKey, SigHashType.ALL.value | SigHashType.FORKID.value);
+             TransactionSigner signer = new TransactionSigner(SigHashType.ALL.value | SigHashType.FORKID.value, privateKey );
+             signer.sign(unsignedTxn, utxoToSign,0);
          }).doesNotThrowAnyException();
 
         //System.out.println(HEX.encode(signedTx.serialize()));
@@ -204,13 +206,11 @@ public class TransactionTest {
 
             Transaction tx = builder.build(false);
 
-            TransactionSigner signer = new TransactionSigner();
+            TransactionSigner signer = new TransactionSigner( sighashType, privateKey);
             signer.sign(
                     tx,
                     new TransactionOutput(BigInteger.valueOf(satoshis), scriptPubKey),
-                    0,
-                    privateKey,
-                    sighashType);
+                    0 );
 
             assertEquals(serializedTx, HEX.encode(tx.serialize()));
 
