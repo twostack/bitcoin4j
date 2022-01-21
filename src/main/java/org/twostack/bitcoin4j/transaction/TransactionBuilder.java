@@ -90,7 +90,52 @@ public class TransactionBuilder {
         }
     }
 
-    /*
+
+    /**
+     utxoMap is expected to have :
+
+     {
+     "transactionId" : [String],
+     "satoshis", [BigInteger],
+     "sequenceNumber", [long],
+     "outputIndex", [int],
+     "scriptPubKey", [String]
+     }
+     */
+    public TransactionBuilder spendFromUtxoMap(TransactionSigner signer, Map<String, Object> utxoMap, @Nullable  UnlockingScriptBuilder unlocker){
+
+        String transactionId = (String) utxoMap.get("transactionId");
+
+        int outputIndex = (int ) utxoMap.get("outputIndex");
+        long sequenceNumber = (long) utxoMap.get("sequenceNumber");
+
+        TransactionOutpoint outpoint = new TransactionOutpoint();
+        outpoint.setOutputIndex(outputIndex);
+        outpoint.setLockingScript(Script.fromAsmString((String)utxoMap.get("scriptPubKey")));
+        outpoint.setSatoshis((BigInteger)utxoMap.get("satoshis"));
+        outpoint.setTransactionId(transactionId);
+
+        this.signerMap.put(transactionId, new SignerDto(signer, outpoint));
+
+        if (unlocker == null){
+            unlocker = new DefaultUnlockBuilder();
+        }
+
+        TransactionInput input = new TransactionInput(
+                HEX.decode((String)utxoMap.get("transactionId")),
+                outputIndex,
+                sequenceNumber,
+                unlocker
+        );
+
+        spendingMap.put((String) utxoMap.get("transactionId"), (BigInteger) utxoMap.get("satoshis"));
+
+        inputs.add(input);
+
+        return this;
+    }
+
+    /**
         utxoMap is expected to have :
 
         {
@@ -172,7 +217,9 @@ public class TransactionBuilder {
 
     }
 
-    public TransactionBuilder spendFromOutpoint(TransactionOutpoint outpoint, long sequenceNumber, UnlockingScriptBuilder unlocker) {
+    public TransactionBuilder spendFromOutpoint(TransactionSigner signer, TransactionOutpoint outpoint, long sequenceNumber, UnlockingScriptBuilder unlocker) {
+
+        this.signerMap.put(outpoint.getTransactionId(), new SignerDto(signer, outpoint));
 
         TransactionInput input = new TransactionInput(
                 HEX.decode(outpoint.getTransactionId()),
@@ -188,7 +235,46 @@ public class TransactionBuilder {
     }
 
 
+    public TransactionBuilder spendFromOutpoint(TransactionOutpoint outpoint, long sequenceNumber, UnlockingScriptBuilder unlocker) {
+
+        TransactionInput input = new TransactionInput(
+                HEX.decode(outpoint.getTransactionId()),
+                outpoint.getOutputIndex(),
+                sequenceNumber,
+                unlocker
+        );
+
+        spendingMap.put(outpoint.getTransactionId(), outpoint.getSatoshis());
+
+        inputs.add(input);
+        return this;
+    }
+
     public TransactionBuilder spendFromOutput(String utxoTxnId, int outputIndex, BigInteger amount, long sequenceNumber, UnlockingScriptBuilder unlocker) {
+
+        TransactionInput input = new TransactionInput(
+                HEX.decode(utxoTxnId),
+                outputIndex,
+                sequenceNumber,
+                unlocker
+        );
+
+        spendingMap.put(utxoTxnId, amount);
+
+        inputs.add(input);
+        return this;
+    }
+
+
+    public TransactionBuilder spendFromOutput(TransactionSigner signer, String utxoTxnId, int outputIndex, BigInteger amount, long sequenceNumber, UnlockingScriptBuilder unlocker) {
+
+        TransactionOutpoint outpoint = new TransactionOutpoint();
+        outpoint.setOutputIndex(outputIndex);
+        outpoint.setLockingScript(unlocker.getUnlockingScript());
+        outpoint.setSatoshis(amount);
+        outpoint.setTransactionId(utxoTxnId);
+
+        this.signerMap.put(utxoTxnId, new SignerDto(signer, outpoint));
 
         TransactionInput input = new TransactionInput(
                 HEX.decode(utxoTxnId),

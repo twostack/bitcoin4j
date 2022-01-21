@@ -1,3 +1,15 @@
+#Release 1.6.1
+### TransactionBuilder Signature API Completion
+
+Version 1.6.0 introduces the new API for passing a 
+TransactionSigner to the TransactionBuilder.spendFromTransaction()
+method. 
+
+This update completes the shape of that API by doing the same for : 
+* TransactionBuilder.spendFromOutpoint()
+* TransactionBuilder.spendFromOutput()
+* TransactionBuilder.spendFromUtxoMap()
+
 #Release 1.6.0
 ### TransactionBuilder Signature generation refactor
 
