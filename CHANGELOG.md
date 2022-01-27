@@ -1,3 +1,10 @@
+#Release 1.6.4
+### Second BugFix for Signature Generation
+
+- When spending multiple outputs from the same transaction it was possible
+  for some of the spending inputs to not get signed.
+  This update fixes this bug. 
+
 #Release 1.6.3
 ### BugFix for Signature Generation
 
