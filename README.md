@@ -21,7 +21,7 @@ Binaries for the library are [available on Maven Central](https://search.maven.o
 
 ### Gradle Dependencies
 ```gradle
-implementation("org.twostack:bitcoin4j:1.5.0")
+implementation("org.twostack:bitcoin4j:1.6.3")
 ```
 
 ### Maven Dependencies
