@@ -116,7 +116,7 @@ public class TransactionBuilder {
         outpoint.setSatoshis((BigInteger)utxoMap.get("satoshis"));
         outpoint.setTransactionId(transactionId);
 
-        this.signerMap.put(transactionId, new SignerDto(signer, outpoint));
+        this.signerMap.put(transactionId + ":" + outputIndex, new SignerDto(signer, outpoint));
 
         if (unlocker == null){
             unlocker = new DefaultUnlockBuilder();
@@ -186,7 +186,7 @@ public class TransactionBuilder {
         outpoint.setSatoshis(output.getAmount());
         outpoint.setTransactionId(transactionId);
 
-        this.signerMap.put(transactionId, new SignerDto(signer, outpoint));
+        this.signerMap.put(transactionId + ":" + outputIndex, new SignerDto(signer, outpoint));
 
         //update the spending transactionInput
         TransactionInput input = new TransactionInput(
@@ -220,7 +220,7 @@ public class TransactionBuilder {
 
     public TransactionBuilder spendFromOutpoint(TransactionSigner signer, TransactionOutpoint outpoint, long sequenceNumber, UnlockingScriptBuilder unlocker) {
 
-        this.signerMap.put(outpoint.getTransactionId(), new SignerDto(signer, outpoint));
+        this.signerMap.put(outpoint.getTransactionId() +  ":" + outpoint.getOutputIndex(), new SignerDto(signer, outpoint));
 
         TransactionInput input = new TransactionInput(
                 HEX.decode(outpoint.getTransactionId()),
@@ -275,7 +275,7 @@ public class TransactionBuilder {
         outpoint.setSatoshis(amount);
         outpoint.setTransactionId(utxoTxnId);
 
-        this.signerMap.put(utxoTxnId, new SignerDto(signer, outpoint));
+        this.signerMap.put(utxoTxnId +  ":" + outputIndex, new SignerDto(signer, outpoint));
 
         TransactionInput input = new TransactionInput(
                 HEX.decode(utxoTxnId),
@@ -434,9 +434,9 @@ public class TransactionBuilder {
             TransactionInput currentInput = inputs.get(index);
 
             List<Map.Entry<String, SignerDto>> result = signerMap.entrySet().stream().filter( (Map.Entry<String, SignerDto> entry) -> {
-                //drop everything from stream except what we're looking for
-                return (entry.getValue().outpoint.getTransactionId().equals(HEX.encode(currentInput.getPrevTxnId())) &&
-                        entry.getValue().outpoint.getOutputIndex() == currentInput.getPrevTxnOutputIndex());
+                String entryKey = entry.getValue().outpoint.getTransactionId() + ":" + entry.getValue().outpoint.getOutputIndex();
+                String currentInputKey = Utils.HEX.encode(currentInput.getPrevTxnId()) + ":" + currentInput.getPrevTxnOutputIndex();
+                return entryKey.equals(currentInputKey);
             }).collect(Collectors.toList());
 
             if (result.size() > 0) {
