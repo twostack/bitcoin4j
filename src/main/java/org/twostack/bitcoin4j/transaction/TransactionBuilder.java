@@ -27,6 +27,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.twostack.bitcoin4j.Utils.HEX;
@@ -421,20 +422,26 @@ public class TransactionBuilder {
         //add transaction outputs
         tx.addOutputs(outputs);
 
+        if (changeScriptBuilder != null) {
+            tx.addOutput(getChangeOutput());
+        }
+
+        tx.setLockTime(nLockTime);
+
         //update inputs with signatures
-        String txId = tx.getTransactionId();
+//        String txId = tx.getTransactionId();
         for (int index = 0; index < inputs.size() ; index++) {
             TransactionInput currentInput = inputs.get(index);
 
-            Optional<Map.Entry<String, SignerDto>> result = signerMap.entrySet().stream().filter( (Map.Entry<String, SignerDto> entry) -> {
+            List<Map.Entry<String, SignerDto>> result = signerMap.entrySet().stream().filter( (Map.Entry<String, SignerDto> entry) -> {
                 //drop everything from stream except what we're looking for
-                return !(entry.getValue().outpoint.getTransactionId() == HEX.encode(currentInput.getPrevTxnId()) &&
+                return (entry.getValue().outpoint.getTransactionId().equals(HEX.encode(currentInput.getPrevTxnId())) &&
                         entry.getValue().outpoint.getOutputIndex() == currentInput.getPrevTxnOutputIndex());
-            }).findFirst();
+            }).collect(Collectors.toList());
 
-            if (result.isPresent()) {
+            if (result.size() > 0) {
 
-                SignerDto dto = result.get().getValue();
+                SignerDto dto = result.get(0).getValue();
                 TransactionOutput utxoToSpend = new TransactionOutput(dto.outpoint.getSatoshis(), dto.outpoint.getLockingScript());
 
                 //TODO: this side-effect programming where the signer mutates my local variable
@@ -442,14 +449,6 @@ public class TransactionBuilder {
                 dto.signer.sign(tx, utxoToSpend, index);
             }
         }
-
-
-
-        if (changeScriptBuilder != null) {
-            tx.addOutput(getChangeOutput());
-        }
-
-        tx.setLockTime(nLockTime);
 
         return tx;
 
