@@ -1,3 +1,11 @@
+#Release 1.6.3
+### BugFix for Signature Generation
+
+- Bug was introduced by previous feature where spending and signing 
+  multiple inputs resulted in invalid signatures being created. Fixed.
+- Added additional testing via the Script Interpreter to verify that 
+  signatures don't break and that utxos are spent correctly. 
+
 #Release 1.6.2
 ### Foot-in-mouth release
 
