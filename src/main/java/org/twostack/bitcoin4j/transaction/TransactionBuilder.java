@@ -116,7 +116,9 @@ public class TransactionBuilder {
         outpoint.setSatoshis((BigInteger)utxoMap.get("satoshis"));
         outpoint.setTransactionId(transactionId);
 
-        this.signerMap.put(transactionId + ":" + outputIndex, new SignerDto(signer, outpoint));
+        String mapKey = transactionId + ":" + outputIndex;
+
+        this.signerMap.put(mapKey, new SignerDto(signer, outpoint));
 
         if (unlocker == null){
             unlocker = new DefaultUnlockBuilder();
@@ -129,7 +131,7 @@ public class TransactionBuilder {
                 unlocker
         );
 
-        spendingMap.put((String) utxoMap.get("transactionId"), (BigInteger) utxoMap.get("satoshis"));
+        spendingMap.put(mapKey, (BigInteger) utxoMap.get("satoshis"));
 
         inputs.add(input);
 
@@ -164,7 +166,8 @@ public class TransactionBuilder {
                 unlocker
         );
 
-        spendingMap.put((String) utxoMap.get("transactionId"), (BigInteger) utxoMap.get("satoshis"));
+        String mapKey = (String) utxoMap.get("transactionId") + ":" + outputIndex;
+        spendingMap.put(mapKey, (BigInteger) utxoMap.get("satoshis"));
 
         inputs.add(input);
 
@@ -186,7 +189,8 @@ public class TransactionBuilder {
         outpoint.setSatoshis(output.getAmount());
         outpoint.setTransactionId(transactionId);
 
-        this.signerMap.put(transactionId + ":" + outputIndex, new SignerDto(signer, outpoint));
+        String mapKey = transactionId + ":" + outputIndex;
+        this.signerMap.put(mapKey, new SignerDto(signer, outpoint));
 
         //update the spending transactionInput
         TransactionInput input = new TransactionInput(
@@ -196,7 +200,7 @@ public class TransactionBuilder {
                 unlocker
         );
 
-        spendingMap.put(transactionId, txn.getOutputs().get(outputIndex).getAmount());
+        spendingMap.put(mapKey, txn.getOutputs().get(outputIndex).getAmount());
 
         inputs.add(input);
         return this;
@@ -211,7 +215,8 @@ public class TransactionBuilder {
                 unlocker
         );
 
-        spendingMap.put(txn.getTransactionId(), txn.getOutputs().get(outputIndex).getAmount());
+        String mapKey = txn.getTransactionId() + ":" + outputIndex;
+        spendingMap.put(mapKey, txn.getOutputs().get(outputIndex).getAmount());
 
         inputs.add(input);
         return this;
@@ -220,7 +225,8 @@ public class TransactionBuilder {
 
     public TransactionBuilder spendFromOutpoint(TransactionSigner signer, TransactionOutpoint outpoint, long sequenceNumber, UnlockingScriptBuilder unlocker) {
 
-        this.signerMap.put(outpoint.getTransactionId() +  ":" + outpoint.getOutputIndex(), new SignerDto(signer, outpoint));
+        String mapKey = outpoint.getTransactionId() + ":" + outpoint.getOutputIndex();
+        this.signerMap.put(mapKey, new SignerDto(signer, outpoint));
 
         TransactionInput input = new TransactionInput(
                 HEX.decode(outpoint.getTransactionId()),
@@ -229,7 +235,7 @@ public class TransactionBuilder {
                 unlocker
         );
 
-        spendingMap.put(outpoint.getTransactionId(), outpoint.getSatoshis());
+        spendingMap.put(mapKey, outpoint.getSatoshis());
 
         inputs.add(input);
         return this;
@@ -245,7 +251,8 @@ public class TransactionBuilder {
                 unlocker
         );
 
-        spendingMap.put(outpoint.getTransactionId(), outpoint.getSatoshis());
+        String mapKey = outpoint.getTransactionId() + ":" + outpoint.getOutputIndex();
+        spendingMap.put(mapKey, outpoint.getSatoshis());
 
         inputs.add(input);
         return this;
@@ -260,7 +267,8 @@ public class TransactionBuilder {
                 unlocker
         );
 
-        spendingMap.put(utxoTxnId, amount);
+        String mapKey = utxoTxnId + ":" + outputIndex;
+        spendingMap.put(mapKey, amount);
 
         inputs.add(input);
         return this;
@@ -275,7 +283,8 @@ public class TransactionBuilder {
         outpoint.setSatoshis(amount);
         outpoint.setTransactionId(utxoTxnId);
 
-        this.signerMap.put(utxoTxnId +  ":" + outputIndex, new SignerDto(signer, outpoint));
+        String mapKey = utxoTxnId + ":" + outputIndex;
+        this.signerMap.put(mapKey, new SignerDto(signer, outpoint));
 
         TransactionInput input = new TransactionInput(
                 HEX.decode(utxoTxnId),
@@ -284,7 +293,7 @@ public class TransactionBuilder {
                 unlocker
         );
 
-        spendingMap.put(utxoTxnId, amount);
+        spendingMap.put(mapKey, amount);
 
         inputs.add(input);
         return this;
