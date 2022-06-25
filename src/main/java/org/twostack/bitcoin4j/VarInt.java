@@ -19,6 +19,8 @@ package org.twostack.bitcoin4j;
 
 import com.google.common.primitives.Ints;
 
+import java.io.ByteArrayInputStream;
+
 /**
  * A variable-length encoded unsigned integer using Satoshi's encoding (a.k.a. "CompactSize").
  */
@@ -59,6 +61,22 @@ public class VarInt {
             value = Utils.readInt64(buf, offset + 1);
             originallyEncodedSize = 9; // 1 marker + 8 data bytes (64 bits)
         }
+    }
+
+    public static VarInt fromStream(ByteArrayInputStream stream)  {
+        int first = 0xFF & stream.read();
+        long value;
+        if (first < 253) {
+            value = first;
+        } else if (first == 253) {
+            value = Utils.readUint16FromStream(stream);
+        } else if (first == 254) {
+            value = Utils.readUint32FromStream(stream);
+        } else {
+            value = Utils.readInt64FromStream(stream);
+        }
+
+        return new VarInt(value);
     }
 
     public long longValue() {

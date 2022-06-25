@@ -165,6 +165,8 @@ public class Utils {
         stream.write((int) (0xFF & (val >> 56)));
     }
 
+
+
     /** Write 8 bytes to the output stream as unsigned 64-bit integer in little endian format. */
     public static void uint64ToByteStreamLE(BigInteger val, OutputStream stream) throws IOException {
         byte[] bytes = val.toByteArray();
@@ -177,6 +179,13 @@ public class Utils {
             for (int i = 0; i < 8 - bytes.length; i++)
                 stream.write(0);
         }
+    }
+
+    /** Write 8 bytes to the output stream as unsigned 64-bit integer in little endian format. */
+    public static void uint64ToByteStreamLE(Long value, OutputStream stream) throws IOException {
+        byte[] bytes = new byte[8];
+        Utils.int64ToByteArrayLE(value, bytes, 0);
+        stream.write(bytes);
     }
 
     /** Parse 2 bytes from the byte array (starting at the offset) as unsigned 16-bit integer in little endian format. */
@@ -236,6 +245,23 @@ public class Utils {
                     ((is.read() & 0xffl) << 8) |
                     ((is.read() & 0xffl) << 16) |
                     ((is.read() & 0xffl) << 24);
+        } catch (IOException x) {
+            throw new RuntimeException(x);
+        }
+    }
+
+
+    /** Parse 8 bytes from the stream as signed 64-bit integer in little endian format. */
+    public static long readInt64FromStream(InputStream is) {
+        try {
+            return (is.read() & 0xffl) |
+                    ((is.read() & 0xffl) << 8) |
+                    ((is.read() & 0xffl) << 16) |
+                    ((is.read() & 0xffl) << 24) |
+                    ((is.read() & 0xffl) << 32) |
+                    ((is.read() & 0xffl) << 40) |
+                    ((is.read() & 0xffl) << 48) |
+                    ((is.read() & 0xffl) << 56);
         } catch (IOException x) {
             throw new RuntimeException(x);
         }
