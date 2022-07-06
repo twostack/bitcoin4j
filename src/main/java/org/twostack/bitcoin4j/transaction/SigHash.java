@@ -63,8 +63,8 @@ public class SigHash {
      * @param unsignedTxn - The transaction to calculate the signature has for
      * @param sigHashType - The bitwise combination of [SighashType] flags
      * @param inputIndex -  The input index in [txn] that the hash applies to
-     * @param subscript - The portion of [SVScript] in the [TransactionOutput] of Spent [Transaction]
-     *                   (after OP_CODESEPERATOR) that will be covered by the signature.
+     * @param subscript - The portion of [Script] in the [TransactionOutput] of Spent [Transaction]
+     *                   (after OP_CODESEPARATOR) that will be covered by the signature.
      * @param amount  - Amount in Satoshis. Used as part of ForkId calculation. Can be ZERO.
      */
     public byte[] createHash(Transaction unsignedTxn, int sigHashType, int inputIndex, Script subscript, BigInteger amount) throws IOException, SigHashException {
@@ -345,7 +345,6 @@ public class SigHash {
     }
 
 
-//    public synchronized Sha256Hash hashForSignatureWitness( Transaction txn, int inputIndex, byte[] connectedScript, Coin prevValue, SigHashType type, boolean anyoneCanPay) {
     private byte[] sigHashForForkid(Transaction txnCopy, int sigHashType, int inputIndex, Script subscriptCopy, BigInteger satoshis) throws SigHashException, IOException {
 
         if (satoshis == null){

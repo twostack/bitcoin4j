@@ -21,7 +21,6 @@ javadoc {
 }
 
 java {
-    sourceCompatibility = JavaVersion.toVersion("1.8")
     withJavadocJar()
     withSourcesJar()
 }
@@ -109,3 +108,5 @@ javadoc {
 }
 
 
+sourceCompatibility = JavaVersion.VERSION_11
+targetCompatibility = JavaVersion.VERSION_11

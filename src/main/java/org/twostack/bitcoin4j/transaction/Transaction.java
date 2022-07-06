@@ -22,8 +22,10 @@ import org.twostack.bitcoin4j.Utils;
 import org.twostack.bitcoin4j.VarInt;
 import org.twostack.bitcoin4j.exception.VerificationException;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -63,8 +65,38 @@ public class Transaction {
     Creates a Transaction from an array of bytes
      */
     public Transaction(ByteBuffer buffer){
-
         parseBuffer(buffer);
+    }
+
+    public static Transaction fromStream(InputStream is) throws IOException {
+        int i; int sizeTxIns; int sizeTxOuts; long nLocktime;
+
+        ArrayList<TransactionInput> inputs = new ArrayList<>();
+        ArrayList<TransactionOutput> outputs = new ArrayList<>();
+
+        long version = Utils.readUint32FromStream(is);
+        sizeTxIns = VarInt.fromStream(is).intValue();
+        for (i = 0; i< sizeTxIns; i++){
+            TransactionInput txInput = TransactionInput.fromStream(is);
+            inputs.add(txInput);
+        }
+
+        sizeTxOuts = VarInt.fromStream(is).intValue();
+        for (i = 0; i< sizeTxOuts; i++){
+            TransactionOutput txOutput = TransactionOutput.fromStream(is);
+            outputs.add(txOutput);
+        }
+
+        nLocktime = Utils.readUint32FromStream(is);
+
+        Transaction tx = new Transaction();
+        tx.version = version;
+        tx.outputs.addAll(outputs);
+        tx.inputs.addAll(inputs);
+        tx.setLockTime(nLocktime);
+
+        return tx;
+
     }
 
     /// Constructs a  transaction instance from the raw hexadecimal string.

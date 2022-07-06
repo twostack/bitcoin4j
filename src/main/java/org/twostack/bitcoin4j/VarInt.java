@@ -20,6 +20,8 @@ package org.twostack.bitcoin4j;
 import com.google.common.primitives.Ints;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
 /**
  * A variable-length encoded unsigned integer using Satoshi's encoding (a.k.a. "CompactSize").
@@ -63,7 +65,7 @@ public class VarInt {
         }
     }
 
-    public static VarInt fromStream(ByteArrayInputStream stream)  {
+    public static VarInt fromStream(InputStream stream) throws IOException {
         int first = 0xFF & stream.read();
         long value;
         if (first < 253) {

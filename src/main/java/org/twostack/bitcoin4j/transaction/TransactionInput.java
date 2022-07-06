@@ -22,6 +22,7 @@ import org.twostack.bitcoin4j.VarInt;
 import org.twostack.bitcoin4j.script.Script;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.Arrays;
 
 public class TransactionInput {
@@ -61,6 +62,21 @@ public class TransactionInput {
         _prevTxnOutputIndex = prevTxnOutputIndex;
         _sequenceNumber = sequenceNumber;
         _unlockingScriptBuilder = unlocker;
+
+    }
+
+    public static TransactionInput fromStream(InputStream is) throws IOException {
+
+        byte[] prevTxnId = Utils.reverseBytes(is.readNBytes(32));
+        long prevTxnOutputIndex = Utils.readUint32FromStream(is);
+
+        VarInt vi = VarInt.fromStream(is);
+        int scriptLength = vi.intValue();
+
+        Script scriptSig = new Script(is.readNBytes(scriptLength));
+        long sequenceNumber = Utils.readUint32FromStream(is);
+
+        return new TransactionInput(prevTxnId, prevTxnOutputIndex, sequenceNumber, new DefaultUnlockBuilder(scriptSig));
 
     }
 

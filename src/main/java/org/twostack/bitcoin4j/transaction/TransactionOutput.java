@@ -16,11 +16,13 @@
  */
 package org.twostack.bitcoin4j.transaction;
 
+import org.twostack.bitcoin4j.Utils;
 import org.twostack.bitcoin4j.VarInt;
 import org.twostack.bitcoin4j.script.Script;
 import org.twostack.bitcoin4j.script.ScriptBuilder;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.math.BigInteger;
 
 public class TransactionOutput {
@@ -59,6 +61,20 @@ public class TransactionOutput {
 
         return fromReader(reader);
 
+    }
+
+    public static TransactionOutput fromStream(InputStream is) throws IOException {
+
+        BigInteger satoshis = BigInteger.valueOf(Utils.readInt64FromStream(is));
+        int size = VarInt.fromStream(is).intValue();
+        Script script;
+        if (size != 0) {
+            script = Script.fromByteArray(is.readNBytes(size));
+        } else {
+            script = new ScriptBuilder().build();
+        }
+
+        return new TransactionOutput(satoshis, script);
     }
 
     /// Returns a byte array containing the raw transaction output

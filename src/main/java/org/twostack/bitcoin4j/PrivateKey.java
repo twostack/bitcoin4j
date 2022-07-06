@@ -22,12 +22,17 @@ import org.twostack.bitcoin4j.params.NetworkType;
 import org.twostack.bitcoin4j.transaction.ReadUtils;
 
 import java.math.BigInteger;
+import java.util.Arrays;
 
 public class PrivateKey {
 
     ECKey key;
     boolean _hasCompressedPubKey;
     NetworkType _networkType;
+
+    public PrivateKey() {
+        this(new ECKey(), true, NetworkType.MAIN);
+    }
 
     public PrivateKey(ECKey key){
         this(key, true, NetworkType.MAIN);
@@ -44,6 +49,9 @@ public class PrivateKey {
         return sig.encodeToDER();
     }
 
+    public String toWIF(){
+        return key.getPrivateKeyAsWiF(_networkType);
+    }
 
     //FIXME: We can use DumpedPrivateKey to replace the internals here
     public static PrivateKey fromWIF(String wif) throws InvalidKeyException {
@@ -127,7 +135,18 @@ public class PrivateKey {
         }
     }
 
+    /**
+     * @return the PublicKey corresponding to this PrivateKey
+     */
     public PublicKey getPublicKey() {
         return PublicKey.fromHex(Utils.HEX.encode(key.getPubKey()));
+    }
+
+
+    /**
+     * @return the ECKey backing this private key.
+     */
+    public ECKey getKey() {
+        return this.key;
     }
 }
