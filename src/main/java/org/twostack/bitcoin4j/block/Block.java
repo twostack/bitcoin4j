@@ -1,6 +1,7 @@
 package org.twostack.bitcoin4j.block;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import org.twostack.bitcoin4j.Sha256Hash;
 import org.twostack.bitcoin4j.UnsafeByteArrayOutputStream;
@@ -99,8 +100,6 @@ public class Block {
     protected boolean headerBytesValid;
     protected boolean transactionBytesValid;
 
-    protected boolean headerParsed;
-    protected boolean transactionsParsed;
 
     // The raw message payload bytes themselves.
     protected byte[] payload;
@@ -137,8 +136,8 @@ public class Block {
         ByteArrayInputStream bis = new ByteArrayInputStream(payload);
 
         version = Utils.readUint32FromStream(bis);
-        prevBlockHash = Sha256Hash.wrap(bis.readNBytes(32));
-        merkleRoot = Sha256Hash.wrap(bis.readNBytes(32));
+        prevBlockHash = Sha256Hash.wrapReversed(bis.readNBytes(32));
+        merkleRoot = Sha256Hash.wrapReversed(bis.readNBytes(32));
         time = Utils.readUint32FromStream(bis);
         difficultyTarget = Utils.readUint32FromStream(bis);
         nonce = Utils.readUint32FromStream(bis);
@@ -147,6 +146,8 @@ public class Block {
 
         // transactions
         VarInt numTransactionsVarInt = VarInt.fromStream(bis);
+
+        if (numTransactionsVarInt.intValue() <= 0) return;
 
         optimalEncodingMessageSize = HEADER_SIZE;
         if (payload.length == cursor) {
@@ -348,5 +349,51 @@ public class Block {
     public void clearTxids() {
         txids = null;
     }
+
+
+    private void writeTransactions(OutputStream stream) throws IOException {
+        // check for no transaction conditions first
+        // must be a more efficient way to do this but I'm tired atm.
+        if (transactions == null || transactions.isEmpty()) {
+            return;
+        }
+
+        // confirmed we must have transactions either cached or as objects.
+//        if (transactionBytesValid && payload != null && payload.length >= offset + length()) {
+//            stream.write(payload, offset + HEADER_SIZE, length() - HEADER_SIZE);
+//            return;
+//        }
+
+        if (transactions != null) {
+            stream.write(new VarInt(transactions.size()).encode());
+            for (Transaction tx : transactions) {
+                stream.write(tx.serialize());
+            }
+        }
+    }
+
+
+    /**
+     * Special handling to check if we have a valid byte array for both header
+     * and transactions
+     *
+     */
+    public byte[] bitcoinSerialize() {
+        ByteArrayOutputStream stream = new UnsafeByteArrayOutputStream();
+        try {
+            writeHeader(stream);
+            writeTransactions(stream);
+        } catch (IOException e) {
+            // Cannot happen, we are serializing to a memory stream.
+        }
+        return stream.toByteArray();
+    }
+
+    public void bitcoinSerializeToStream(OutputStream stream) throws IOException {
+        writeHeader(stream);
+        // We may only have enough data to write the header.
+        writeTransactions(stream);
+    }
+
 
 }
