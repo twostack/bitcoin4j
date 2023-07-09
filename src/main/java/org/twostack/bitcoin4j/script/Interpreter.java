@@ -1108,8 +1108,11 @@ public class Interpreter {
         } catch (ProtocolException | IOException e) {
             throw new RuntimeException(e);   // Should not happen unless we were given a totally broken transaction.
         }
-        if (scriptSig.getProgram().length > 10000 || scriptPubKey.getProgram().length > 10000)
-            throw new ScriptException(ScriptError.SCRIPT_ERR_SCRIPT_SIZE, "Script larger than 10,000 bytes");
+
+        if (verifyFlags.contains(VerifyFlag.P2SH) && verifyFlags.contains(VerifyFlag.STRICTENC)) {
+            if (scriptSig.getProgram().length > 10000 || scriptPubKey.getProgram().length > 10000)
+                throw new ScriptException(ScriptError.SCRIPT_ERR_SCRIPT_SIZE, "Script larger than 10,000 bytes");
+        }
 
         LinkedList<byte[]> stack = new LinkedList<byte[]>();
         LinkedList<byte[]> p2shStack = null;

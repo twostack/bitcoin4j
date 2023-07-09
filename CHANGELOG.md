@@ -1,3 +1,24 @@
+#Release 1.6.6
+### Bug Fixes and small Feature improvement
+
+Fixed script-size bug
+    - Script-size limit of 10k bytes should only be done for P2SH scripts with STRICTENC flag.
+
+Bug fix - reversed hashes
+    - placed internal hashes in correct byte order
+
+Blocks & Utilities
+    - Added ability to construct Transactions from Streams
+    - Added streaming constructor to VarInt
+    - Added functionality to Block. It used to be mostly a stub.
+    - Minor documentation fixes
+
+Additional utilities for number manipulation
+
+Bugfix for fee calculations
+    - Fee calculation when spending multiple utxos from same transaction
+      was broken. 
+
 #Release 1.6.4
 ### Second BugFix for Signature Generation
 
