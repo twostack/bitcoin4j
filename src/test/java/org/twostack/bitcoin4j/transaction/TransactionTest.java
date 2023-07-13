@@ -204,7 +204,7 @@ public class TransactionTest {
             builder.spendFromUtxoMap(utxoMap, new P2PKHUnlockBuilder(privateKey.getPublicKey()));
             builder.withFeePerKb(100000);
 
-            Transaction tx = builder.build(false);
+            Transaction tx = builder.build(false).setVersion(1);
 
             TransactionSigner signer = new TransactionSigner( sighashType, privateKey);
             signer.sign(
@@ -319,7 +319,7 @@ public class TransactionTest {
 
             try {
                 scriptPubKeys = parseScriptPubKeys(test.get(0));
-                spendingTx = Transaction.fromHex(test.get(1).asText().toLowerCase());
+                spendingTx = Transaction.fromHex(test.get(1).asText().toLowerCase()).setVersion(1);
             }catch(ScriptException ex){
                 continue;
             }

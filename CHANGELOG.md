@@ -1,3 +1,9 @@
+#Release 1.6.7
+### Configurable Transaction Version numbers
+
+Added ability to set the Transaction version number. New transactions on the BSV
+network are Version 2, and creating a V1 Transaction that spends from a V2 Transaction breaks. 
+
 #Release 1.6.6
 ### Bug Fixes and small Feature improvement
 

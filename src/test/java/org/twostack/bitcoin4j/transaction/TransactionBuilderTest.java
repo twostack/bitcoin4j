@@ -93,6 +93,50 @@ public class TransactionBuilderTest {
     }
 
     @Test
+    public void canVerifySimpleP2PKHSpend()
+            throws InvalidKeyException,
+            TransactionException,
+            SigHashException,
+            SignatureDecodeException,
+            IOException {
+
+        String aliceWif = "cRHYFwjjw2Xn2gjxdGw6RRgKJZqipZx7j8i64NdwzxcD6SezEZV5";
+        String bobWif = "cStLVGeWx7fVYKKDXYWVeEbEcPZEC4TD73DjQpHCks2Y8EAjVDSS";
+        PrivateKey bobPrivateKey = PrivateKey.fromWIF(bobWif);
+        Address bobAddress = Address.fromKey(NetworkAddressType.TEST_PKH, bobPrivateKey.getPublicKey());
+        PrivateKey alicePrivateKey = PrivateKey.fromWIF(aliceWif);
+        Address aliceAddress = Address.fromKey(NetworkAddressType.TEST_PKH, alicePrivateKey.getPublicKey());
+        String ALICEs_FUNDING_TX = "020000000211f64ed43c4c707f85ec96faca5d3a22ca46e9e5c308e761aa558446a044c29f000000006b483045022100d71bc3a2625f86e3979c1bee3462e99434de4c7cffb1aed1689b5aab639cb66d0220631ad7e0e4385866b8136b55c6a2165cd33aa9553e50131d59fc93c0346773b1412103d006bbe112ea67350dae23ff37a525902d30b20178eeb900a0b6ea2b7fd60148feffffff11f64ed43c4c707f85ec96faca5d3a22ca46e9e5c308e761aa558446a044c29f010000006a4730440220036d99b5df93845c6aba564c813b9f29b78533d8624aacabfc79a9e1c1a2b4910220427d7d7dc8d1efd551b8ed9a078ab0c6b10d66bd3fcefab9665a5fab4fe6b068412103afc7c94f8dd7cf7f7ab1e6b2334f26d930f27f01fad77dba260713e18a9d7f1ffeffffff0200ca9a3b000000001976a914f5d33ee198ad13840ce410ba96e149e463a6c35288ac94daf505000000001976a9140a3486d829609bb8a3e86c21539383a8222a605688ac0d010000";
+
+        Transaction fundingTx = Transaction.fromHex(ALICEs_FUNDING_TX);
+
+        Integer sighashType = SigHashType.ALL.value | SigHashType.FORKID.value;
+        //issuer will spend from rawTx
+        P2PKHUnlockBuilder unlockingScript = new P2PKHUnlockBuilder(alicePrivateKey.getPublicKey());
+        TransactionSigner issuerSigner = new TransactionSigner(sighashType, alicePrivateKey);
+
+        Transaction signedTxn = new TransactionBuilder()
+                .spendFromTransaction(issuerSigner, fundingTx, 0, TransactionInput.MAX_SEQ_NUMBER, unlockingScript)
+                .spendTo(new P2PKHLockBuilder(bobAddress), BigInteger.valueOf(Coin.COIN.value))
+                .sendChangeTo(aliceAddress)
+                .withFeePerKb(50)
+                .build(false);
+
+        Assertions.assertThatCode(() -> {
+            Interpreter interp = new Interpreter();
+            HashSet<Script.VerifyFlag> verifyFlags = new HashSet<Script.VerifyFlag>();
+            verifyFlags.add(Script.VerifyFlag.SIGHASH_FORKID);
+            verifyFlags.add(Script.VerifyFlag.UTXO_AFTER_GENESIS);
+
+            Script scriptSig = signedTxn.getInputs().get(0).getScriptSig();
+            Script scriptPubKey = fundingTx.getOutputs().get(0).getScript();
+            Long fundingAmount = fundingTx.getOutputs().get(0).getAmount().longValue();
+            interp.correctlySpends(scriptSig, scriptPubKey, signedTxn, 0, verifyFlags, Coin.valueOf(fundingAmount));
+        }).doesNotThrowAnyException();
+
+    }
+
+    @Test
     public void builderCanSpendFromOutput() throws InvalidKeyException, IOException {
 
         //This WIF is for a private key that actually has testnet coins on TESTNET

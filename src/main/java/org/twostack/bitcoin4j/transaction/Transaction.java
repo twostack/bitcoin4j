@@ -32,7 +32,7 @@ import java.util.*;
 
 public class Transaction {
 
-    private long version = 1;
+    private long version = 2; //default txn version some unit test vectors need version 1 though
     private long nLockTime = 0;
     private ArrayList<TransactionInput> inputs = new ArrayList<>();
     private ArrayList<TransactionOutput> outputs = new ArrayList<>();
@@ -297,6 +297,10 @@ public class Transaction {
         inputs.add(input);
     }
 
+    public Transaction setVersion(long version){
+        this.version = version;
+        return this;
+    }
     public long getVersion() {
         return version;
     }

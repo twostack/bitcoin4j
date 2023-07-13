@@ -428,12 +428,13 @@ public class TransactionBuilder {
         //add transaction inputs
         tx.addInputs(inputs);
 
-        //add transaction outputs
-        tx.addOutputs(outputs);
-
         if (changeScriptBuilder != null) {
             tx.addOutput(getChangeOutput());
         }
+
+        //add transaction outputs
+        tx.addOutputs(outputs);
+
 
         tx.setLockTime(nLockTime);
 
