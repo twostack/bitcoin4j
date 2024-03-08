@@ -132,7 +132,7 @@ public class TransactionSigner {
 
         //FIXME: This should account for ANYONECANPAY mask that limits outputs to sign over
         ///      NOTE: Stripping Subscript should be done inside SIGHASH class
-        Script subscript = utxo.getScript(); //scriptSig FIXME: WTF !? Sighash should fail on this
+        Script subscript = utxo.getScript();
         SigHash sigHash = new SigHash();
 
         //NOTE: Return hash in LittleEndian (already double-sha256 applied)

@@ -68,6 +68,14 @@ public class TransactionOutpoint {
         this.lockingScript = lockingScript;
     }
 
+   TransactionOutpoint(String transactionId, Integer outputIndex, BigInteger satoshis, Script lockingScript){
+      this.transactionId = transactionId;
+      this.outputIndex = outputIndex;
+      this.satoshis  = satoshis;
+      this.lockingScript = lockingScript;
+   }
+   TransactionOutpoint(){ }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

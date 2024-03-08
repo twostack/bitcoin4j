@@ -201,7 +201,10 @@ public class SigHash {
         }
 
         if (((sigHashType & SigHashType.FORKID.value) != 0) && (flags & ENABLE_SIGHASH_FORKID) != 0) {
-            byte[] preImage = sigHashForForkid(txnCopy, sigHashType, inputIndex, subscriptCopy, amount);
+            //remove up to first CODE_SEP
+            Script stripped = stripUptoFirstCodeSep(subscriptCopy);
+
+            byte[] preImage = sigHashForForkid(txnCopy, sigHashType, inputIndex, stripped, amount);
             return preImage;
         }
 
@@ -409,18 +412,12 @@ public class SigHash {
 
         byte[] buf = writer.getBytes();
         return buf;
-//        byte[] hash = Sha256Hash.hashTwice(buf);
-//
-//        return hash;
     }
 
 
-//    private byte[] getHash(Transaction txn) throws IOException {
-//    }
-
 
     /// Strips all OP_CODESEPARATOR instructions from the script.
-    // FIXME: Test if everything "AFTER" first SEPARATOR needs stripping, or just the SEPARATORS themselves
+    // FIXME: Test if everything "BEFORE" first SEPARATOR needs stripping, or just the SEPARATORS themselves
     Script removeCodeseparators(Script script) {
         List<ScriptChunk> newChunks = new ArrayList<ScriptChunk>();
         List<ScriptChunk> oldChunks = script.getChunks();
@@ -440,5 +437,18 @@ public class SigHash {
         return new Script(newChunks);
     }
 
+    private Script stripUptoFirstCodeSep(Script subscriptCopy) {
+        List<ScriptChunk> chunks = subscriptCopy.getChunks();
+
+        int position = 0;
+        for (int i = 0; i < chunks.size(); i++) {
+            if (chunks.get(i).opcode == ScriptOpCodes.OP_CODESEPARATOR) {
+                position = i + 1; //skip code separator
+                break;
+            }
+        }
+
+        return new Script(chunks.subList(position, chunks.size()));
+    }
 
 }

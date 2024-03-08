@@ -28,6 +28,7 @@ import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
+import static java.lang.Math.pow;
 import static org.twostack.bitcoin4j.script.ScriptOpCodes.*;
 
 /**
@@ -95,8 +96,10 @@ public class ScriptBuilder {
             opcode = OP_PUSHDATA1;
         } else if (data.length < 65536) {
             opcode = OP_PUSHDATA2;
+        } else if (data.length < pow(2, 32)) {
+            opcode = OP_PUSHDATA4;
         } else {
-            throw new RuntimeException("Unimplemented");
+            throw new RuntimeException("Data push of > 2Gb is not supported");
         }
         return addChunk(index, new ScriptChunk(opcode, copy));
     }
