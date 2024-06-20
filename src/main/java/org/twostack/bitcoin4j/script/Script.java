@@ -92,7 +92,8 @@ public class Script {
     public static final EnumSet<VerifyFlag> ALL_VERIFY_FLAGS = EnumSet.allOf(VerifyFlag.class);
 
     private static final Logger log = LoggerFactory.getLogger(Script.class);
-    public static final long MAX_SCRIPT_ELEMENT_SIZE = 520;  // bytes
+//    public static final long MAX_SCRIPT_ELEMENT_SIZE = 520;  // bytes
+    public static final long MAX_SCRIPT_ELEMENT_SIZE = 214748364; // 2Gig after genesis
     private static final int MAX_OPS_PER_SCRIPT = 201;
     private static final int MAX_STACK_SIZE = 1000;
     private static final int MAX_PUBKEYS_PER_MULTISIG = 20;

@@ -62,35 +62,4 @@ public class SigHashTest {
         runSighashTests("sighash-sv.json");
     }
 
-   /*
-
-    test('sv-node test vectors for sighash', () async {
-        await File("${Directory.current.path}/test/data/sighash-sv.json")
-            .readAsString()
-            .then((contents) => jsonDecode(contents))
-            .then((jsonData) {
-            List.from(jsonData).forEach((vector) {
-                //drop the first item
-
-                if (vector.length != 1) {
-                    var txbuf = vector[0];
-                    var scriptbuf = vector[1];
-                    var subscript = SVScript.fromHex(scriptbuf);
-                    var nin = vector[2];
-                    var nhashtype = vector[3] >> 0;
-                    // var nhashtype = vector[3]>>>0;
-                    var sighashbuf = vector[4];
-                    var tx = Transaction.fromHex(txbuf);
-
-                    // make sure transaction serialize/deserialize is isomorphic
-                    expect(tx.uncheckedSerialize(), equals(txbuf));
-
-                    // sighash ought to be correct
-                    expect(Sighash().hash(tx, nhashtype, nin, subscript, BigInt.zero), equals(sighashbuf));
-                }
-
-            });
-        });
-    });
-    */
 }

@@ -1,3 +1,16 @@
+### Interpreter Fixes
+- Stack based operations in interpreter could potentially fail due to memory corruption
+  Only affected validation of spending via Interpreter.correctlySpends() 
+- Fixed MAX element size for script validation
+- Fixed lshift and rshift ops inside interpreter
+
+### Change Output from TransactionBuilder
+
+- Made it so that the Change Output constructed by the TransactionBuilder is
+  always the last output in the Transaction
+- Added Code Separator updates/fixes to get sighash preimage to conform to 
+  having preceding code stripped. 
+
 #Release 1.6.7
 ### Configurable Transaction Version numbers
 

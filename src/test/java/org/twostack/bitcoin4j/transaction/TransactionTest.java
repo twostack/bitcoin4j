@@ -237,8 +237,10 @@ public class TransactionTest {
     public void dataDrivenValidTransactions(String filename) throws Exception {
         JsonNode json = new ObjectMapper().readTree(new InputStreamReader(getClass().getResourceAsStream(filename), StandardCharsets.UTF_8));
         for (JsonNode test : json) {
-            if (test.isArray() && test.size() == 1 && test.get(0).isTextual())
+            if (test.isArray() && test.size() == 1 && test.get(0).isTextual()) {
+                System.out.println(test.get(0));
                 continue; // This is a comment.
+            }
             Transaction spendingTx = null;
 
             try {
@@ -269,7 +271,7 @@ public class TransactionTest {
                         input.setPrevTxnOutputIndex(-1);
                     }
 
-                    System.out.println("Spending INPUT : [" + i + "]");
+//                    System.out.println("Spending INPUT : [" + i + "]");
 
                     //reconstruct the key into our Map of Public Keys using the details from
                     //the parsed transaction

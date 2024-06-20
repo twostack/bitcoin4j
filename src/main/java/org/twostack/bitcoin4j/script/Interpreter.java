@@ -43,7 +43,7 @@ import java.util.*;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.twostack.bitcoin4j.script.Script.*;
-import static org.twostack.bitcoin4j.script.ScriptError.SCRIPT_ERR_INVALID_STACK_OPERATION;
+import static org.twostack.bitcoin4j.script.ScriptError.*;
 import static org.twostack.bitcoin4j.script.ScriptFlags.*;
 import static org.twostack.bitcoin4j.script.ScriptOpCodes.*;
 
@@ -84,6 +84,10 @@ public class Interpreter {
 
     public static final int MAX_SCRIPT_ELEMENT_SIZE_BEFORE_GENESIS = 520;
 
+
+    private static final int[] RSHIFT_MASKS = new int[]{0xFF, 0xFE, 0xFC, 0xF8, 0xF0, 0xE0, 0xC0, 0x80};
+    private static final int[] LSHIFT_MASKS = new int[]{0xFF, 0x7F, 0x3F, 0x1F, 0x0F, 0x07, 0x03, 0x01};
+
     ////////////////////// Script verification and helpers ////////////////////////////////
 
     private static boolean castToBool(byte[] data) {
@@ -120,23 +124,23 @@ public class Interpreter {
         if (chunk.length > maxLength)
             throw new ScriptException(ScriptError.SCRIPT_ERR_NUMBER_OVERFLOW, "Script attempted to use an integer larger than " + maxLength + " bytes");
 
-        if (requireMinimal && chunk.length > 0) {
-            // Check that the number is encoded with the minimum possible
-            // number of bytes.
-            //
-            // If the most-significant-byte - excluding the sign bit - is zero
-            // then we're not minimal. Note how this test also rejects the
-            // negative-zero encoding, 0x80.
-            if ((chunk[chunk.length - 1] & 0x7f) == 0) {
-                // One exception: if there's more than one byte and the most
-                // significant bit of the second-most-significant-byte is set
-                // it would conflict with the sign bit. An example of this case
-                // is +-255, which encode to 0xff00 and 0xff80 respectively.
-                // (big-endian).
-                if (chunk.length <= 1 || (chunk[chunk.length - 2] & 0x80) == 0) {
+        if (requireMinimal && !Utils.checkMinimallyEncodedLE(chunk, maxLength)/* chunk.length > 0*/) {
+//            // Check that the number is encoded with the minimum possible
+//            // number of bytes.
+//            //
+//            // If the most-significant-byte - excluding the sign bit - is zero
+//            // then we're not minimal. Note how this test also rejects the
+//            // negative-zero encoding, 0x80.
+//            if ((chunk[chunk.length - 1] & 0x7f) == 0) {
+//                // One exception: if there's more than one byte and the most
+//                // significant bit of the second-most-significant-byte is set
+//                // it would conflict with the sign bit. An example of this case
+//                // is +-255, which encode to 0xff00 and 0xff80 respectively.
+//                // (big-endian).
+//                if (chunk.length <= 1 || (chunk[chunk.length - 2] & 0x80) == 0) {
                     throw  new ScriptException(ScriptError.SCRIPT_ERR_NUMBER_MINENCODE, "non-minimally encoded script number");
-                }
-            }
+//                }
+//            }
         }
 
         return Utils.decodeMPI(Utils.reverseBytes(chunk), false);
@@ -226,6 +230,7 @@ public class Interpreter {
                                      Script script, LinkedList<byte[]> stack, Coin value, Set<VerifyFlag> verifyFlags /*, ScriptStateListener scriptStateListener*/) throws ScriptException {
         int opCount = 0;
         int lastCodeSepLocation = 0;
+        int b2ncount = 0;
         final boolean enforceMinimal = verifyFlags.contains(VerifyFlag.MINIMALDATA);
         final boolean utxoAfterGenesis = verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS);
         final int maxScriptNumLength = getMaxScriptNumLength(utxoAfterGenesis);
@@ -259,8 +264,13 @@ public class Interpreter {
             if (isOpcodeDisabled(opcode, verifyFlags) && (!verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) || shouldExecute)){
                 throw new ScriptException(ScriptError.SCRIPT_ERR_DISABLED_OPCODE, "Script included a disabled Script Op.");
             }
+            if (chunk.opcode == OP_0){
+                if (!shouldExecute)
+                    continue;
 
-            if (shouldExecute && OP_0 <= opcode && opcode <= OP_PUSHDATA4) {
+                stack.add(new byte[]{});
+
+            }else if (shouldExecute && OP_0 <= opcode && opcode <= OP_PUSHDATA4) {
                 // Check minimal push
                 if (verifyFlags.contains(VerifyFlag.MINIMALDATA) && !chunk.isShortestPossiblePushData())
                     throw new ScriptException(ScriptError.SCRIPT_ERR_MINIMALDATA, "Script included a not minimal push operation.");
@@ -362,12 +372,12 @@ public class Interpreter {
                     case OP_TOALTSTACK:
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_TOALTSTACK on an empty stack");
-                        altstack.add(stack.pollLast());
+                        altstack.add(stack.pollLast().clone());
                         break;
                     case OP_FROMALTSTACK:
                         if (altstack.size() < 1)
                             throw new ScriptException(ScriptError.SCRIPT_ERR_INVALID_ALTSTACK_OPERATION, "Attempted OP_FROMALTSTACK on an empty altstack");
-                        stack.add(altstack.pollLast());
+                        stack.add(altstack.pollLast().clone());
                         break;
                     case OP_2DROP:
                         if (stack.size() < 2)
@@ -406,12 +416,12 @@ public class Interpreter {
                     case OP_2ROT:
                         if (stack.size() < 6)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_2ROT on a stack with size < 6");
-                        byte[] OP2ROTtmpChunk6 = stack.pollLast();
-                        byte[] OP2ROTtmpChunk5 = stack.pollLast();
-                        byte[] OP2ROTtmpChunk4 = stack.pollLast();
-                        byte[] OP2ROTtmpChunk3 = stack.pollLast();
-                        byte[] OP2ROTtmpChunk2 = stack.pollLast();
-                        byte[] OP2ROTtmpChunk1 = stack.pollLast();
+                        byte[] OP2ROTtmpChunk6 = stack.pollLast().clone();
+                        byte[] OP2ROTtmpChunk5 = stack.pollLast().clone();
+                        byte[] OP2ROTtmpChunk4 = stack.pollLast().clone();
+                        byte[] OP2ROTtmpChunk3 = stack.pollLast().clone();
+                        byte[] OP2ROTtmpChunk2 = stack.pollLast().clone();
+                        byte[] OP2ROTtmpChunk1 = stack.pollLast().clone();
                         stack.add(OP2ROTtmpChunk3);
                         stack.add(OP2ROTtmpChunk4);
                         stack.add(OP2ROTtmpChunk5);
@@ -422,10 +432,10 @@ public class Interpreter {
                     case OP_2SWAP:
                         if (stack.size() < 4)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_2SWAP on a stack with size < 4");
-                        byte[] OP2SWAPtmpChunk4 = stack.pollLast();
-                        byte[] OP2SWAPtmpChunk3 = stack.pollLast();
-                        byte[] OP2SWAPtmpChunk2 = stack.pollLast();
-                        byte[] OP2SWAPtmpChunk1 = stack.pollLast();
+                        byte[] OP2SWAPtmpChunk4 = stack.pollLast().clone();
+                        byte[] OP2SWAPtmpChunk3 = stack.pollLast().clone();
+                        byte[] OP2SWAPtmpChunk2 = stack.pollLast().clone();
+                        byte[] OP2SWAPtmpChunk1 = stack.pollLast().clone();
                         stack.add(OP2SWAPtmpChunk3);
                         stack.add(OP2SWAPtmpChunk4);
                         stack.add(OP2SWAPtmpChunk1);
@@ -448,12 +458,12 @@ public class Interpreter {
                     case OP_DUP:
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_DUP on an empty stack");
-                        stack.add(stack.getLast());
+                        stack.add(stack.getLast().clone());
                         break;
                     case OP_NIP:
                         if (stack.size() < 2)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_NIP on a stack with size < 2");
-                        byte[] OPNIPtmpChunk = stack.pollLast();
+                        byte[] OPNIPtmpChunk = stack.pollLast().clone();
                         stack.pollLast();
                         stack.add(OPNIPtmpChunk);
                         break;
@@ -462,10 +472,34 @@ public class Interpreter {
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_OVER on a stack with size < 2");
                         Iterator<byte[]> itOVER = stack.descendingIterator();
                         itOVER.next();
-                        stack.add(itOVER.next());
+                        stack.add(itOVER.next().clone());
                         break;
                     case OP_PICK:
                     case OP_ROLL:
+                        if (stack.size() < 1)
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_PICK/OP_ROLL on an empty stack");
+
+                        byte[] rollVal = stack.pollLast().clone();
+                        long val = castToBigInteger(rollVal, maxScriptNumLength, verifyFlags.contains(VerifyFlag.MINIMALDATA)).longValue();
+//                        long val = castToBigInteger(state, rollVal, maxNumElementSize, enforceMinimal).longValue();
+
+                        if (val < 0 || val >= stack.size())
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "OP_PICK/OP_ROLL attempted to get data deeper than stack size");
+                        Iterator<byte[]> itPICK = stack.descendingIterator();
+                        for (long i = 0; i < val; i++)
+                            itPICK.next();
+                        byte[] copySrc = itPICK.next();
+                        byte[] OPROLLtmpChunk = new byte[copySrc.length];
+                        //make a copy of the entry in the iterator to prevent two items in stack sharing a memory address
+                        System.arraycopy(copySrc, 0, OPROLLtmpChunk, 0, copySrc.length);
+                        if (opcode == OP_ROLL)
+                            itPICK.remove();
+                        //whether the value is derived doesn't depend on where in the stack
+                        //it's picked from so just add the original StackItem
+                        stack.add(copySrc);
+                        break;
+
+                        /*
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_PICK/OP_ROLL on an empty stack");
                         long val = castToBigInteger(stack.pollLast(),maxScriptNumLength, verifyFlags.contains(VerifyFlag.MINIMALDATA)).longValue();
@@ -479,12 +513,15 @@ public class Interpreter {
                             itPICK.remove();
                         stack.add(OPROLLtmpChunk);
                         break;
+
+                         */
+
                     case OP_ROT:
                         if (stack.size() < 3)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_ROT on a stack with size < 3");
-                        byte[] OPROTtmpChunk3 = stack.pollLast();
-                        byte[] OPROTtmpChunk2 = stack.pollLast();
-                        byte[] OPROTtmpChunk1 = stack.pollLast();
+                        byte[] OPROTtmpChunk3 = stack.pollLast().clone();
+                        byte[] OPROTtmpChunk2 = stack.pollLast().clone();
+                        byte[] OPROTtmpChunk1 = stack.pollLast().clone();
                         stack.add(OPROTtmpChunk2);
                         stack.add(OPROTtmpChunk3);
                         stack.add(OPROTtmpChunk1);
@@ -493,8 +530,8 @@ public class Interpreter {
                     case OP_TUCK:
                         if (stack.size() < 2)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_SWAP on a stack with size < 2");
-                        byte[] OPSWAPtmpChunk2 = stack.pollLast();
-                        byte[] OPSWAPtmpChunk1 = stack.pollLast();
+                        byte[] OPSWAPtmpChunk2 = stack.pollLast().clone();
+                        byte[] OPSWAPtmpChunk1 = stack.pollLast().clone();
                         stack.add(OPSWAPtmpChunk2);
                         stack.add(OPSWAPtmpChunk1);
                         if (opcode == OP_TUCK)
@@ -505,8 +542,8 @@ public class Interpreter {
                     case OP_CAT:
                         if (stack.size() < 2)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
-                        byte[] catBytes2 = stack.pollLast();
-                        byte[] catBytes1 = stack.pollLast();
+                        byte[] catBytes2 = stack.pollLast().clone();
+                        byte[] catBytes1 = stack.pollLast().clone();
 
                         int len = catBytes1.length + catBytes2.length;
                         if (!verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && len > MAX_SCRIPT_ELEMENT_SIZE_BEFORE_GENESIS)
@@ -515,7 +552,7 @@ public class Interpreter {
                         byte[] catOut = new byte[len];
                         System.arraycopy(catBytes1, 0, catOut, 0, catBytes1.length);
                         System.arraycopy(catBytes2, 0, catOut, catBytes1.length, catBytes2.length);
-                        stack.addLast(catOut);
+                        stack.add(catOut);
 
                         break;
 
@@ -528,7 +565,7 @@ public class Interpreter {
                         if (!verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && numSize > MAX_SCRIPT_ELEMENT_SIZE_BEFORE_GENESIS)
                             throw new ScriptException(ScriptError.SCRIPT_ERR_PUSH_SIZE, "Push value size limit exceeded.");
 
-                        byte[] rawNumBytes = stack.pollLast();
+                        byte[] rawNumBytes = stack.pollLast().clone();
 
                         // Try to see if we can fit that number in the number of
                         // byte requested.
@@ -540,9 +577,9 @@ public class Interpreter {
 
                         if (minimalNumBytes.length == numSize) {
                             //already the right size so just push it to stack
-                            stack.addLast(minimalNumBytes);
+                            stack.add(minimalNumBytes);
                         } else if (numSize == 0) {
-                            stack.addLast(Utils.EMPTY_BYTE_ARRAY);
+                            stack.add(Utils.EMPTY_BYTE_ARRAY);
                         } else {
                             int signBit = 0x00;
                             if (minimalNumBytes.length > 0) {
@@ -553,15 +590,16 @@ public class Interpreter {
                             byte[] expandedNumBytes = new byte[numSize]; //initialized to all zeroes
                             System.arraycopy(minimalNumBytes, 0, expandedNumBytes, 0, minimalBytesToCopy);
                             expandedNumBytes[expandedNumBytes.length - 1] = (byte) signBit;
-                            stack.addLast(expandedNumBytes);
+                            stack.add(expandedNumBytes);
                         }
                         break;
 
                     case OP_SPLIT:
                         if (stack.size() < 2)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
-
-                        BigInteger biSplitPos = castToBigInteger(stack.pollLast(), maxScriptNumLength,enforceMinimal);
+                        byte[] biSplitPosItem = stack.pollLast().clone();
+                        byte[] splitBytesItem = stack.pollLast().clone();
+                        BigInteger biSplitPos = castToBigInteger(biSplitPosItem, maxScriptNumLength, enforceMinimal);
 
                         //sanity check in case we aren't enforcing minimal number encoding
                         //we will check that the biSplitPos value can be safely held in an int
@@ -569,96 +607,80 @@ public class Interpreter {
                         //is greater than the target type can hold.
                         BigInteger biMaxInt = BigInteger.valueOf((long) Integer.MAX_VALUE);
                         if (biSplitPos.compareTo(biMaxInt) >= 0)
-                            throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Invalid OP_SPLIT range.");
+                            throw new ScriptException(SCRIPT_ERR_SPLIT_RANGE, "Invalid OP_SPLIT range.");
 
                         int splitPos = biSplitPos.intValue();
-                        byte[] splitBytes = stack.pollLast();
+                        byte[] splitBytes = splitBytesItem;
 
-                        if (splitPos > splitBytes.length || splitPos < 0)
-                            throw new ScriptException(ScriptError.SCRIPT_ERR_SPLIT_RANGE, "Invalid OP_SPLIT range.");
+                        if (splitPos > splitBytesItem.length || splitPos < 0)
+                            throw new ScriptException(SCRIPT_ERR_SPLIT_RANGE, "Invalid OP_SPLIT range.");
 
                         byte[] splitOut1 = new byte[splitPos];
-                        byte[] splitOut2 = new byte[splitBytes.length - splitPos];
+                        byte[] splitOut2 = new byte[splitBytesItem.length - splitPos];
 
                         System.arraycopy(splitBytes, 0, splitOut1, 0, splitPos);
                         System.arraycopy(splitBytes, splitPos, splitOut2, 0, splitOut2.length);
 
-                        stack.addLast(splitOut1);
-                        stack.addLast(splitOut2);
+                        stack.add(splitOut1);
+                        stack.add(splitOut2);
                         break;
 
                     case OP_BIN2NUM:
+                        b2ncount++;
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
 
-                        byte[] binBytes = stack.pollLast();
+                        byte[] binBytes = stack.pollLast().clone();
                         byte[] numBytes = Utils.minimallyEncodeLE(binBytes);
 
                         if (!Utils.checkMinimallyEncodedLE(numBytes, maxScriptNumLength))
                             throw new ScriptException(ScriptError.SCRIPT_ERR_INVALID_NUMBER_RANGE, "Given operand is not a number within the valid range [-2^31...2^31]");
 
-                        stack.addLast(numBytes);
+                        stack.add(numBytes);
 
                         break;
                     case OP_SIZE:
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_SIZE on an empty stack");
-                        stack.add(Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(stack.getLast().length), false)));
+                        byte[] sizeItem = stack.getLast();
+                        stack.add(Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(sizeItem.length), false)));
                         break;
 
                     case OP_LSHIFT:
                     case OP_RSHIFT:
-
+                        // (x n -- out)
                         if (stack.size() < 2)
-                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Too few items on stack for SHIFT Op");
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Invalid stack operation.");
+                        byte[] shiftNItem = stack.pollLast().clone();
+                        byte[] shiftData = stack.pollLast().clone();
+                        int shiftN = castToBigInteger(shiftNItem, maxScriptNumLength, enforceMinimal).intValueExact();
+                        if (shiftN < 0)
+                            throw new ScriptException(SCRIPT_ERR_INVALID_NUMBER_RANGE, "Invalid numer range.");
 
-                        byte[] shiftCountBuf = stack.getLast();
-                        byte[] valueToShiftBuf = stack.get(stack.size() - 2);
-
-                        if (valueToShiftBuf.length == 0) {
-                            stack.pop();
-                        } else {
-                            final BigInteger shiftCount = castToBigInteger(shiftCountBuf, 5, verifyFlags.contains(VerifyFlag.MINIMALDATA));
-
-                            int n = shiftCount.intValue();
-                            if (n < 0)
-                                throw new ScriptException(ScriptError.SCRIPT_ERR_INVALID_NUMBER_RANGE, "Can't shift negative number of bits (n < 0)");
-
-                            stack.pop();
-                            stack.pop();
-
-                            //using the Bytes lib. In-place byte-ops.
-                            Bytes shifted = Bytes.wrap(valueToShiftBuf, ByteOrder.BIG_ENDIAN);
-
-                            if (opcode == ScriptOpCodes.OP_LSHIFT) {
-                                //Dart BigInt automagically right-pads the shifted bits
-                                shifted = shifted.leftShift(n);
-                            }
-                            if (opcode == ScriptOpCodes.OP_RSHIFT) {
-                                shifted = shifted.rightShift(n);
-                            }
-
-                            if (n > 0){
-                                //shift occured
-                                stack.push(shifted.array());
-
-                            }else{
-                                //no shift, just push original value back onto stack
-                                stack.push(valueToShiftBuf);
-                            }
-
+                        byte[] shifted;
+                        switch (opcode) {
+                            case OP_LSHIFT:
+                                shifted = lShift(shiftData, shiftN);
+                                break;
+                            case OP_RSHIFT:
+                                shifted = rShift(shiftData, shiftN);
+                                break;
+                            default:
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "switched opcode at runtime"); //can't happen
                         }
+                        stack.add(shifted);
+
                         break;
                     case OP_INVERT: {
                         if (stack.size() < 1) {
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "No elements left on stack.");
                         }
-                        byte[] vch1 = stack.pollLast();
+                        byte[] vch1 = stack.pollLast().clone();
                         // To avoid allocating, we modify vch1 in place
                         for (int i = 0; i < vch1.length; i++) {
                             vch1[i] = (byte) (~vch1[i] & 0xFF);
                         }
-                        stack.push(vch1);
+                        stack.add(vch1);
 
                         break;
                     }
@@ -672,8 +694,13 @@ public class Interpreter {
 
                         //valtype &vch2 = stacktop(-1);
                         //valtype &vch1 = stacktop(-2);
-                        byte[] vch2 = stack.pollLast();
-                        byte[] vch1 = stack.pollLast();
+                        byte[] vch2Poll = stack.pollLast().clone();
+                        byte[] vch1Poll = stack.pollLast().clone();
+
+                        byte[] vch2 = new byte[vch2Poll.length];
+                        System.arraycopy(vch2Poll, 0, vch2, 0, vch2Poll.length);
+                        byte[] vch1 = new byte[vch1Poll.length];
+                        System.arraycopy(vch1Poll, 0, vch1, 0, vch1Poll.length);
 
                         // Inputs must be the same size
                         if (vch1.length != vch2.length) {
@@ -701,11 +728,8 @@ public class Interpreter {
                                 break;
                         }
 
-                        // And pop vch2.
-                        //popstack(stack);
-
                         //put vch1 back on stack
-                        stack.addLast(vch1);
+                        stack.add(vch1);
 
                         break;
 
@@ -910,7 +934,7 @@ public class Interpreter {
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_RIPEMD160 on an empty stack");
                         RIPEMD160Digest digest = new RIPEMD160Digest();
-                        byte[] dataToHash = stack.pollLast();
+                        byte[] dataToHash = stack.pollLast().clone();
                         digest.update(dataToHash, 0, dataToHash.length);
                         byte[] ripmemdHash = new byte[20];
                         digest.doFinal(ripmemdHash, 0);
@@ -928,17 +952,17 @@ public class Interpreter {
                     case OP_SHA256:
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_SHA256 on an empty stack");
-                        stack.add(Sha256Hash.hash(stack.pollLast()));
+                        stack.add(Sha256Hash.hash(stack.pollLast().clone()));
                         break;
                     case OP_HASH160:
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_HASH160 on an empty stack");
-                        stack.add(Utils.sha256hash160(stack.pollLast()));
+                        stack.add(Utils.sha256hash160(stack.pollLast().clone()));
                         break;
                     case OP_HASH256:
                         if (stack.size() < 1)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_SHA256 on an empty stack");
-                        stack.add(Sha256Hash.hashTwice(stack.pollLast()));
+                        stack.add(Sha256Hash.hashTwice(stack.pollLast().clone()));
                         break;
                     case OP_CODESEPARATOR:
                         lastCodeSepLocation = nextLocationInScript;
@@ -1156,7 +1180,7 @@ public class Interpreter {
             // EvalScript above would return false.
             assert(!stack.isEmpty());
 
-            byte[] scriptPubKeyBytes = stack.pollLast();
+            byte[] scriptPubKeyBytes = stack.pollLast().clone();
             Script scriptPubKeyP2SH = new Script(scriptPubKeyBytes);
 
             executeScript(transaction, scriptSigIndex, scriptPubKeyP2SH, stack, satoshis, verifyFlags);
@@ -1191,8 +1215,8 @@ public class Interpreter {
                 || verifyFlags.contains(VerifyFlag.LOW_S);
         if (stack.size() < 2)
             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_CHECKSIG(VERIFY) on a stack with size < 2");
-        byte[] pubKey = stack.pollLast();
-        byte[] sigBytes = stack.pollLast();
+        byte[] pubKey = stack.pollLast().clone();
+        byte[] sigBytes = stack.pollLast().clone();
 
         byte[] prog = script.getProgram();
         byte[] connectedScript = Arrays.copyOfRange(prog, lastCodeSepLocation, prog.length);
@@ -1477,7 +1501,7 @@ public class Interpreter {
         //take all pubkeys off the stack
         LinkedList<byte[]> pubkeys = new LinkedList<byte[]>();
         for (int i = 0; i < pubKeyCount; i++) {
-            byte[] pubKey = stack.pollLast();
+            byte[] pubKey = stack.pollLast().clone();
             pubkeys.add(pubKey);
         }
 
@@ -1490,7 +1514,7 @@ public class Interpreter {
         //take all signatures off the stack
         LinkedList<byte[]> sigs = new LinkedList<byte[]>();
         for (int i = 0; i < sigCount; i++) {
-            byte[] sig = stack.pollLast();
+            byte[] sig = stack.pollLast().clone();
             sigs.add(sig);
         }
 
@@ -1589,7 +1613,7 @@ public class Interpreter {
         }
 
         //pop the dummy element (core bug argument)
-        byte[] nullDummy = stack.pollLast();
+        byte[] nullDummy = stack.pollLast().clone();
         if (verifyFlags.contains(VerifyFlag.NULLDUMMY) && nullDummy.length > 0)
             throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_NULLDUMMY, "OP_CHECKMULTISIG(VERIFY) with non-null nulldummy: " + Arrays.toString(nullDummy));
 
@@ -1695,4 +1719,78 @@ public class Interpreter {
     private static boolean isValidMaxOpsPerScript(int nOpCount, boolean isGenesisEnabled) {
         return (nOpCount <= getMaxOpsPerScript(isGenesisEnabled));
     }
+
+    /**
+     * shift x right by n bits, implements OP_RSHIFT
+     * see: https://github.com/bitcoin-sv/bitcoin-sv/commit/27d24de643dbd3cc852e1de7c90e752e19abb9d8
+     * <p>
+     * Note this does not support shifting more than Integer.MAX_VALUE
+     *
+     * @param xItem
+     * @param n
+     * @return
+     */
+    private static byte[] rShift(byte[] xItem, int n) {
+        byte[] x = xItem;
+
+        int bit_shift = n % 8;
+        int byte_shift = n / 8;
+
+        int mask = RSHIFT_MASKS[bit_shift];
+        int overflow_mask = (~mask) & 0xff;
+
+        byte[] result = new byte[x.length];
+        for (int i = 0; i < x.length; i++) {
+            int k = i + byte_shift;
+            if (k < x.length) {
+                int val = x[i] & mask;
+                val = val >>> bit_shift;
+                result[k] |= val;
+            }
+
+            if (k + 1 < x.length) {
+                int carryval = x[i] & overflow_mask;
+                carryval <<= 8 - bit_shift;
+                result[k + 1] |= carryval;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * shift x left by n bits, implements OP_LSHIFT
+     * see: https://github.com/bitcoin-sv/bitcoin-sv/commit/27d24de643dbd3cc852e1de7c90e752e19abb9d8
+     * <p>
+     * Note this does not support shifting more than Integer.MAX_VALUE
+     *
+     * @param xItem
+     * @param n
+     * @return
+     */
+    private static byte[] lShift(byte[] xItem, int n) {
+        byte[] x = xItem;
+        int bit_shift = n % 8;
+        int byte_shift = n / 8;
+
+        int mask = LSHIFT_MASKS[bit_shift];
+        int overflow_mask = (~mask) & 0xff;
+
+        byte[] result = new byte[x.length];
+        for (int i = x.length - 1; i >= 0; i--) {
+            int k = i - byte_shift;
+            if (k >= 0) {
+                int val = x[i] & mask;
+                val <<= bit_shift;
+                result[k] |= val;
+            }
+
+            if (k - 1 >= 0) {
+                int carryval = x[i] & overflow_mask;
+                carryval = carryval >>> 8 - bit_shift;
+                result[k - 1] |= carryval;
+            }
+        }
+        return result;
+    }
+
 }
