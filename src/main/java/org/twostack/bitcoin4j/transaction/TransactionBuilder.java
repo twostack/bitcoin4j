@@ -585,6 +585,10 @@ public class TransactionBuilder {
         return unspent.subtract(getFee()); //sub
     }
 
+    public void setFee(BigInteger fee){
+        transactionFee = fee;
+    }
+
     public BigInteger getFee(){
 
         if (transactionFee != null){

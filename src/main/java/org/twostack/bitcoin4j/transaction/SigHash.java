@@ -68,6 +68,18 @@ public class SigHash {
      * @param amount  - Amount in Satoshis. Used as part of ForkId calculation. Can be ZERO.
      */
     public byte[] createHash(Transaction unsignedTxn, int sigHashType, int inputIndex, Script subscript, BigInteger amount) throws IOException, SigHashException {
+        return createHash(unsignedTxn, sigHashType, inputIndex, subscript, amount, null, false);
+    }
+
+    /**
+     * Overload that accepts an optional lockingScript for SIGHASH_CHRONICLE support.
+     * When CHRONICLE flag (0x20) is set and afterChronicle is true, the legacy/OTDA digest
+     * algorithm is used even if FORKID is also set. If lockingScript is provided, it is used
+     * as scriptCode instead of the connected script from the spending transaction.
+     *
+     * @param afterChronicle whether the Chronicle upgrade is active — gates interpretation of bit 0x20
+     */
+    public byte[] createHash(Transaction unsignedTxn, int sigHashType, int inputIndex, Script subscript, BigInteger amount, @Nullable Script lockingScript, boolean afterChronicle) throws IOException, SigHashException {
         /// [flags]       - The bitwise combination of [ScriptFlags] related to Sighash. Applies to BSV and BCH only,
         ///                 and refers to `ENABLE_SIGHASH_FORKID` and `ENABLE_REPLAY_PROTECTION`
         ///
@@ -76,6 +88,12 @@ public class SigHash {
         Transaction txnCopy = new Transaction(ByteBuffer.wrap(unsignedTxn.serialize()));
 
         Script subscriptCopy = new Script(subscript.getProgram()); //make a copy of subscript
+
+        // If CHRONICLE flag is set (and Chronicle is active) and a lockingScript is provided, use it as the scriptCode
+        boolean hasChronicle = afterChronicle && (sigHashType & SigHashType.CHRONICLE.value) != 0;
+        if (hasChronicle && lockingScript != null) {
+            subscriptCopy = new Script(lockingScript.getProgram());
+        }
 
         if ((flags & ENABLE_REPLAY_PROTECTION) > 0) {
             // Legacy chain's value for fork id must be of the form 0xffxxxx.
@@ -86,7 +104,8 @@ public class SigHash {
             sigHashType = (newForkValue << 8) | (sigHashType & 0xff);
         }
 
-        if (((sigHashType & SigHashType.FORKID.value) != 0) && (flags & ENABLE_SIGHASH_FORKID) != 0) {
+        // SIGHASH_CHRONICLE uses legacy/OTDA path even when FORKID is present
+        if (!hasChronicle && ((sigHashType & SigHashType.FORKID.value) != 0) && (flags & ENABLE_SIGHASH_FORKID) != 0) {
             byte[] preImage = sigHashForForkid(txnCopy, sigHashType, inputIndex, subscriptCopy, amount);
             return Sha256Hash.hashTwice(preImage);
         }
@@ -94,7 +113,8 @@ public class SigHash {
         this._sigHashType = sigHashType;
 
         // For no ForkId sighash, separators need to be removed.
-        this._subScript = removeCodeseparators(subscript);
+        // When CHRONICLE is active and lockingScript was provided, subscriptCopy already holds the locking script
+        this._subScript = removeCodeseparators(hasChronicle && lockingScript != null ? subscriptCopy : subscript);
 
         //blank out the txn input scripts
         for (TransactionInput input : txnCopy.getInputs()) {
@@ -181,6 +201,13 @@ public class SigHash {
      * Added here as convenience method for use with sCrypt Smart Contracting
      */
     public byte[] getSighashPreimage(Transaction unsignedTxn, int sigHashType, int inputIndex, Script subscript, BigInteger amount) throws IOException, SigHashException {
+        return getSighashPreimage(unsignedTxn, sigHashType, inputIndex, subscript, amount, null, false);
+    }
+
+    /**
+     * Overload that accepts an optional lockingScript for SIGHASH_CHRONICLE support.
+     */
+    public byte[] getSighashPreimage(Transaction unsignedTxn, int sigHashType, int inputIndex, Script subscript, BigInteger amount, @Nullable Script lockingScript, boolean afterChronicle) throws IOException, SigHashException {
 
     /// [flags]       - The bitwise combination of [ScriptFlags] related to Sighash. Applies to BSV and BCH only,
         ///                 and refers to `ENABLE_SIGHASH_FORKID` and `ENABLE_REPLAY_PROTECTION`
@@ -191,6 +218,12 @@ public class SigHash {
 
         Script subscriptCopy = new Script(subscript.getProgram()); //make a copy of subscript
 
+        // If CHRONICLE flag is set (and Chronicle is active) and a lockingScript is provided, use it as the scriptCode
+        boolean hasChronicle = afterChronicle && (sigHashType & SigHashType.CHRONICLE.value) != 0;
+        if (hasChronicle && lockingScript != null) {
+            subscriptCopy = new Script(lockingScript.getProgram());
+        }
+
         if ((flags & ENABLE_REPLAY_PROTECTION) > 0) {
             // Legacy chain's value for fork id must be of the form 0xffxxxx.
             // By xoring with 0xdead, we ensure that the value will be different
@@ -200,7 +233,8 @@ public class SigHash {
             sigHashType = (newForkValue << 8) | (sigHashType & 0xff);
         }
 
-        if (((sigHashType & SigHashType.FORKID.value) != 0) && (flags & ENABLE_SIGHASH_FORKID) != 0) {
+        // SIGHASH_CHRONICLE uses legacy/OTDA path even when FORKID is present
+        if (!hasChronicle && ((sigHashType & SigHashType.FORKID.value) != 0) && (flags & ENABLE_SIGHASH_FORKID) != 0) {
             //remove up to first CODE_SEP
             Script stripped = stripUptoFirstCodeSep(subscriptCopy);
 
@@ -211,7 +245,8 @@ public class SigHash {
         this._sigHashType = sigHashType;
 
         // For no ForkId sighash, separators need to be removed.
-        this._subScript = removeCodeseparators(subscript);
+        // When CHRONICLE is active and lockingScript was provided, subscriptCopy already holds the locking script
+        this._subScript = removeCodeseparators(hasChronicle && lockingScript != null ? subscriptCopy : subscript);
 
         //blank out the txn input scripts
         for (TransactionInput input : txnCopy.getInputs()) {

@@ -161,6 +161,13 @@ public class ScriptOpCodes {
     public static final int OP_NOP6 = 0xb5;
     public static final int OP_NOP7 = 0xb6;
     public static final int OP_NOP8 = 0xb7;
+
+    // Chronicle upgrade opcodes (reuse NOP4-NOP8 slots)
+    public static final int OP_SUBSTR = 0xb3;
+    public static final int OP_LEFT = 0xb4;
+    public static final int OP_RIGHT = 0xb5;
+    public static final int OP_LSHIFTNUM = 0xb6;
+    public static final int OP_RSHIFTNUM = 0xb7;
     public static final int OP_NOP9 = 0xb8;
     public static final int OP_NOP10 = 0xb9;
     public static final int OP_INVALIDOPCODE = 0xff;
@@ -283,6 +290,11 @@ public class ScriptOpCodes {
             .put("FALSE", OP_FALSE)
             .put("TRUE", OP_TRUE)
             .put("NOP2", OP_NOP2)
+            .put("SUBSTR", OP_SUBSTR)
+            .put("LEFT", OP_LEFT)
+            .put("RIGHT", OP_RIGHT)
+            .put("LSHIFTNUM", OP_LSHIFTNUM)
+            .put("RSHIFTNUM", OP_RSHIFTNUM)
             .build();
 
     /**

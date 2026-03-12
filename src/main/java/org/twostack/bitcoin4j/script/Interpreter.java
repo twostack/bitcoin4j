@@ -40,6 +40,7 @@ import java.nio.ByteOrder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
+import java.util.EnumSet;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.twostack.bitcoin4j.script.Script.*;
@@ -78,6 +79,9 @@ public class Interpreter {
 
     // Maximum script number length after Genesis
     public static final int MAX_SCRIPT_NUM_LENGTH_AFTER_GENESIS = 750 * ONE_KILOBYTE;
+
+    // Maximum script number length after Chronicle (32MB)
+    public static final int MAX_SCRIPT_NUM_LENGTH_AFTER_CHRONICLE = 32 * 1024 * 1024;
 
     public static final int MAX_SCRIPT_NUM_LENGTH_BEFORE_GENESIS = 4;
     public static final int DEFAULT_SCRIPT_NUM_LENGTH_POLICY_AFTER_GENESIS = 250 * 1024;
@@ -191,12 +195,24 @@ public class Interpreter {
 
     private static boolean isOpcodeDisabled(int opcode, Set<VerifyFlag> verifyFlags) {
 
+        boolean afterChronicle = verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE);
 
         switch (opcode) {
             case OP_2MUL:
             case OP_2DIV:
-                //disabled codes
-                return true;
+                // Re-enabled after Chronicle
+                return !afterChronicle;
+
+            // Chronicle string/shift opcodes (reuse NOP4-NOP8 slots)
+            // These are only enabled after Chronicle; pre-Chronicle they remain NOPs
+            // handled in the NOP case of the switch
+            case OP_SUBSTR: // == OP_NOP4
+            case OP_LEFT:   // == OP_NOP5
+            case OP_RIGHT:  // == OP_NOP6
+            case OP_LSHIFTNUM: // == OP_NOP7
+            case OP_RSHIFTNUM: // == OP_NOP8
+                // Not disabled — handled as NOPs pre-Chronicle and as opcodes post-Chronicle
+                return false;
 
             default:
                 //not an opcode that was ever disabled
@@ -227,7 +243,27 @@ public class Interpreter {
      * likely to change in future.
      */
     public static void executeScript(@Nullable Transaction txContainingThis, long index,
-                                     Script script, LinkedList<byte[]> stack, Coin value, Set<VerifyFlag> verifyFlags /*, ScriptStateListener scriptStateListener*/) throws ScriptException {
+                                     Script script, LinkedList<byte[]> stack, Coin value, Set<VerifyFlag> verifyFlags) throws ScriptException {
+        executeScript(txContainingThis, index, script, stack, value, verifyFlags, null, null);
+    }
+
+    /**
+     * Overload that accepts an optional lockingScript for SIGHASH_CHRONICLE support.
+     */
+    public static void executeScript(@Nullable Transaction txContainingThis, long index,
+                                     Script script, LinkedList<byte[]> stack, Coin value, Set<VerifyFlag> verifyFlags, @Nullable Script lockingScript) throws ScriptException {
+        executeScript(txContainingThis, index, script, stack, value, verifyFlags, lockingScript, null);
+    }
+
+    /**
+     * Full overload with optional lockingScript and trace callback.
+     *
+     * @param lockingScript optional locking script for SIGHASH_CHRONICLE support
+     * @param traceCallback optional callback invoked after each opcode execution for debugging
+     */
+    public static void executeScript(@Nullable Transaction txContainingThis, long index,
+                                     Script script, LinkedList<byte[]> stack, Coin value, Set<VerifyFlag> verifyFlags,
+                                     @Nullable Script lockingScript, @Nullable ScriptTraceCallback traceCallback) throws ScriptException {
         int opCount = 0;
         int lastCodeSepLocation = 0;
         int b2ncount = 0;
@@ -607,13 +643,13 @@ public class Interpreter {
                         //is greater than the target type can hold.
                         BigInteger biMaxInt = BigInteger.valueOf((long) Integer.MAX_VALUE);
                         if (biSplitPos.compareTo(biMaxInt) >= 0)
-                            throw new ScriptException(SCRIPT_ERR_SPLIT_RANGE, "Invalid OP_SPLIT range.");
+                            throw new ScriptException(SCRIPT_ERR_SPLIT_RANGE, "Invalid OP_SPLIT range: position " + biSplitPos + " exceeds max int, data hex=" + Utils.HEX.encode(splitBytesItem) + " (length=" + splitBytesItem.length + ")");
 
                         int splitPos = biSplitPos.intValue();
                         byte[] splitBytes = splitBytesItem;
 
                         if (splitPos > splitBytesItem.length || splitPos < 0)
-                            throw new ScriptException(SCRIPT_ERR_SPLIT_RANGE, "Invalid OP_SPLIT range.");
+                            throw new ScriptException(SCRIPT_ERR_SPLIT_RANGE, "Invalid OP_SPLIT range: position=" + splitPos + " but data length=" + splitBytesItem.length + ", data hex=" + Utils.HEX.encode(splitBytesItem));
 
                         byte[] splitOut1 = new byte[splitPos];
                         byte[] splitOut2 = new byte[splitBytesItem.length - splitPos];
@@ -741,8 +777,10 @@ public class Interpreter {
                     case OP_EQUALVERIFY:
                         if (stack.size() < 2)
                             throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_EQUALVERIFY on a stack with size < 2");
-                        if (!Arrays.equals(stack.pollLast(), stack.pollLast()))
-                            throw new ScriptException(ScriptError.SCRIPT_ERR_EQUALVERIFY, "OP_EQUALVERIFY: non-equal data");
+                        byte[] eqvItem1 = stack.pollLast();
+                        byte[] eqvItem2 = stack.pollLast();
+                        if (!Arrays.equals(eqvItem1, eqvItem2))
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_EQUALVERIFY, "OP_EQUALVERIFY: non-equal data. top=" + Utils.HEX.encode(eqvItem1) + " (" + eqvItem1.length + " bytes) vs second=" + Utils.HEX.encode(eqvItem2) + " (" + eqvItem2.length + " bytes)");
                         break;
                     case OP_1ADD:
                     case OP_1SUB:
@@ -974,7 +1012,7 @@ public class Interpreter {
                             throw new IllegalStateException("Script attempted signature check but no tx was provided");
 
                         try {
-                            executeCheckSig(txContainingThis, (int) index, script, stack, lastCodeSepLocation, opcode, value, verifyFlags);
+                            executeCheckSig(txContainingThis, (int) index, script, stack, lastCodeSepLocation, opcode, value, verifyFlags, lockingScript);
                         } catch(SignatureEncodingException ex){
                             stack.add(new byte[] {}); //push false onto stack
                             throw new ScriptException(ex.getErr(), ex.getMessage());
@@ -990,7 +1028,7 @@ public class Interpreter {
                         if (txContainingThis == null)
                             throw new IllegalStateException("Script attempted signature check but no tx was provided");
                         try {
-                            opCount = executeMultiSig(txContainingThis, (int) index, script, stack, opCount, lastCodeSepLocation, opcode, value, verifyFlags);
+                            opCount = executeMultiSig(txContainingThis, (int) index, script, stack, opCount, lastCodeSepLocation, opcode, value, verifyFlags, lockingScript);
 
                         } catch(SignatureEncodingException ex){
                             stack.add(new byte[] {}); //push false onto stack
@@ -1023,11 +1061,6 @@ public class Interpreter {
                         executeCheckSequenceVerify(txContainingThis, (int) index, stack, verifyFlags);
                         break;
                     case OP_NOP1:
-                    case OP_NOP4:
-                    case OP_NOP5:
-                    case OP_NOP6:
-                    case OP_NOP7:
-                    case OP_NOP8:
                     case OP_NOP9:
                     case OP_NOP10:
                         if (verifyFlags.contains(VerifyFlag.DISCOURAGE_UPGRADABLE_NOPS)) {
@@ -1035,8 +1068,177 @@ public class Interpreter {
                         }
                         break;
 
+                    // OP_NOP4/OP_SUBSTR, OP_NOP5/OP_LEFT, OP_NOP6/OP_RIGHT, OP_NOP7/OP_LSHIFTNUM, OP_NOP8/OP_RSHIFTNUM
+                    case OP_SUBSTR: // == OP_NOP4 == 0xB3
+                    case OP_LEFT:   // == OP_NOP5 == 0xB4
+                    case OP_RIGHT:  // == OP_NOP6 == 0xB5
+                    case OP_LSHIFTNUM: // == OP_NOP7 == 0xB6
+                    case OP_RSHIFTNUM: // == OP_NOP8 == 0xB7
+                    {
+                        if (!verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE)) {
+                            // Pre-Chronicle: treat as NOPs
+                            if (verifyFlags.contains(VerifyFlag.DISCOURAGE_UPGRADABLE_NOPS)) {
+                                throw new ScriptException(ScriptError.SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS, "Script used a reserved opcode " + opcode);
+                            }
+                            break;
+                        }
+
+                        // Post-Chronicle: execute string/shift operations
+                        int chronicleNumLength = MAX_SCRIPT_NUM_LENGTH_AFTER_CHRONICLE;
+
+                        if (opcode == OP_SUBSTR) {
+                            // SUBSTR(string, begin, length) → substring
+                            if (stack.size() < 3)
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_SUBSTR on insufficient stack");
+                            byte[] substrLenBytes = stack.pollLast();
+                            byte[] substrBeginBytes = stack.pollLast();
+                            byte[] substrData = stack.pollLast();
+                            int substrBegin = castToBigInteger(substrBeginBytes, chronicleNumLength, enforceMinimal).intValue();
+                            int substrLen = castToBigInteger(substrLenBytes, chronicleNumLength, enforceMinimal).intValue();
+                            if (substrBegin < 0 || substrLen < 0 || substrBegin + substrLen > substrData.length) {
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "OP_SUBSTR range out of bounds");
+                            }
+                            byte[] substrResult = new byte[substrLen];
+                            System.arraycopy(substrData, substrBegin, substrResult, 0, substrLen);
+                            stack.add(substrResult);
+                        } else if (opcode == OP_LEFT) {
+                            // LEFT(string, length) → leftmost bytes
+                            if (stack.size() < 2)
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_LEFT on insufficient stack");
+                            byte[] leftLenBytes = stack.pollLast();
+                            byte[] leftData = stack.pollLast();
+                            int leftLen = castToBigInteger(leftLenBytes, chronicleNumLength, enforceMinimal).intValue();
+                            if (leftLen < 0 || leftLen > leftData.length) {
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "OP_LEFT length out of bounds");
+                            }
+                            byte[] leftResult = new byte[leftLen];
+                            System.arraycopy(leftData, 0, leftResult, 0, leftLen);
+                            stack.add(leftResult);
+                        } else if (opcode == OP_RIGHT) {
+                            // RIGHT(string, length) → rightmost bytes
+                            if (stack.size() < 2)
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_RIGHT on insufficient stack");
+                            byte[] rightLenBytes = stack.pollLast();
+                            byte[] rightData = stack.pollLast();
+                            int rightLen = castToBigInteger(rightLenBytes, chronicleNumLength, enforceMinimal).intValue();
+                            if (rightLen < 0 || rightLen > rightData.length) {
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "OP_RIGHT length out of bounds");
+                            }
+                            byte[] rightResult = new byte[rightLen];
+                            System.arraycopy(rightData, rightData.length - rightLen, rightResult, 0, rightLen);
+                            stack.add(rightResult);
+                        } else if (opcode == OP_LSHIFTNUM) {
+                            // LSHIFTNUM(num, shift) → num << shift (arithmetic)
+                            if (stack.size() < 2)
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_LSHIFTNUM on insufficient stack");
+                            byte[] lshiftShiftBytes = stack.pollLast();
+                            byte[] lshiftNumBytes = stack.pollLast();
+                            BigInteger lshiftShift = castToBigInteger(lshiftShiftBytes, chronicleNumLength, enforceMinimal);
+                            BigInteger lshiftNum = castToBigInteger(lshiftNumBytes, chronicleNumLength, enforceMinimal);
+                            BigInteger lshiftResult = lshiftNum.shiftLeft(lshiftShift.intValue());
+                            stack.add(Utils.reverseBytes(Utils.encodeMPI(lshiftResult, false)));
+                        } else { // OP_RSHIFTNUM
+                            // RSHIFTNUM(num, shift) → num >> shift (arithmetic)
+                            if (stack.size() < 2)
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_RSHIFTNUM on insufficient stack");
+                            byte[] rshiftShiftBytes = stack.pollLast();
+                            byte[] rshiftNumBytes = stack.pollLast();
+                            BigInteger rshiftShift = castToBigInteger(rshiftShiftBytes, chronicleNumLength, enforceMinimal);
+                            BigInteger rshiftNum = castToBigInteger(rshiftNumBytes, chronicleNumLength, enforceMinimal);
+                            BigInteger rshiftResult = rshiftNum.shiftRight(rshiftShift.intValue());
+                            stack.add(Utils.reverseBytes(Utils.encodeMPI(rshiftResult, false)));
+                        }
+                        break;
+                    }
+
+                    // OP_VER — push transaction version onto stack (Chronicle only)
+                    case OP_VER:
+                    {
+                        if (!verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE)) {
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_BAD_OPCODE, "OP_VER is disabled pre-Chronicle");
+                        }
+                        if (txContainingThis == null) {
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "OP_VER requires transaction context");
+                        }
+                        long version = txContainingThis.getVersion();
+                        stack.add(Utils.reverseBytes(Utils.encodeMPI(BigInteger.valueOf(version), false)));
+                        break;
+                    }
+
+                    // OP_VERIF — conditional branch if tx version >= comparison (Chronicle only)
+                    case OP_VERIF:
+                    {
+                        if (!verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE)) {
+                            // Pre-Chronicle: OP_VERIF is always invalid (even in non-executing branches
+                            // it's handled by the old isInvalidBranchingOpcode path in the default case)
+                            if (verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && !shouldExecute) {
+                                break;
+                            }
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_BAD_OPCODE, "OP_VERIF is disabled pre-Chronicle");
+                        }
+                        boolean verCondition = false;
+                        if (shouldExecute) {
+                            if (txContainingThis == null) {
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "OP_VERIF requires transaction context");
+                            }
+                            if (stack.size() < 1)
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_VERIF on empty stack");
+                            long version = txContainingThis.getVersion();
+                            BigInteger comparison = castToBigInteger(stack.pollLast(), MAX_SCRIPT_NUM_LENGTH_AFTER_CHRONICLE, enforceMinimal);
+                            verCondition = version >= comparison.longValue();
+                        }
+                        ifStack.add(verCondition);
+                        elseStack.add(false);
+                        continue;
+                    }
+
+                    // OP_VERNOTIF — conditional branch if tx version < comparison (Chronicle only)
+                    case OP_VERNOTIF:
+                    {
+                        if (!verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE)) {
+                            if (verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && !shouldExecute) {
+                                break;
+                            }
+                            throw new ScriptException(ScriptError.SCRIPT_ERR_BAD_OPCODE, "OP_VERNOTIF is disabled pre-Chronicle");
+                        }
+                        boolean verCondition = false;
+                        if (shouldExecute) {
+                            if (txContainingThis == null) {
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "OP_VERNOTIF requires transaction context");
+                            }
+                            if (stack.size() < 1)
+                                throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_VERNOTIF on empty stack");
+                            long version = txContainingThis.getVersion();
+                            BigInteger comparison = castToBigInteger(stack.pollLast(), MAX_SCRIPT_NUM_LENGTH_AFTER_CHRONICLE, enforceMinimal);
+                            verCondition = version < comparison.longValue();
+                        }
+                        ifStack.add(verCondition);
+                        elseStack.add(false);
+                        continue;
+                    }
+
+                    // OP_2MUL — multiply top stack item by 2 (Chronicle only)
+                    case OP_2MUL:
+                    {
+                        if (stack.size() < 1)
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_2MUL on empty stack");
+                        BigInteger num = castToBigInteger(stack.pollLast(), MAX_SCRIPT_NUM_LENGTH_AFTER_CHRONICLE, enforceMinimal);
+                        stack.add(Utils.reverseBytes(Utils.encodeMPI(num.shiftLeft(1), false)));
+                        break;
+                    }
+
+                    // OP_2DIV — divide top stack item by 2 (Chronicle only)
+                    case OP_2DIV:
+                    {
+                        if (stack.size() < 1)
+                            throw new ScriptException(SCRIPT_ERR_INVALID_STACK_OPERATION, "Attempted OP_2DIV on empty stack");
+                        BigInteger num = castToBigInteger(stack.pollLast(), MAX_SCRIPT_NUM_LENGTH_AFTER_CHRONICLE, enforceMinimal);
+                        stack.add(Utils.reverseBytes(Utils.encodeMPI(num.shiftRight(1), false)));
+                        break;
+                    }
+
                     default:
-                        if (isInvalidBranchingOpcode(opcode) && verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && !shouldExecute){
+                        if (isInvalidBranchingOpcode(opcode, verifyFlags) && verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS) && !shouldExecute){
                             break;
                         }
                         throw new ScriptException(ScriptError.SCRIPT_ERR_BAD_OPCODE, "Script used a reserved or disabled opcode: " + opcode);
@@ -1045,13 +1247,23 @@ public class Interpreter {
 
             if (stack.size() + altstack.size() > MAX_STACK_SIZE || stack.size() + altstack.size() < 0)
                 throw new ScriptException(ScriptError.SCRIPT_ERR_STACK_SIZE, "Stack size exceeded range");
+
+            // Invoke trace callback if provided
+            if (traceCallback != null) {
+                String opName = ScriptOpCodes.getOpCodeName(opcode);
+                traceCallback.onStep(nextLocationInScript - chunk.size(), opcode, opName, stack, altstack);
+            }
         }
 
         if (!ifStack.isEmpty())
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNBALANCED_CONDITIONAL, "OP_IF/OP_NOTIF without OP_ENDIF");
     }
 
-    private static boolean isInvalidBranchingOpcode(int opcode) {
+    private static boolean isInvalidBranchingOpcode(int opcode, Set<VerifyFlag> verifyFlags) {
+        if (verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE)) {
+            // Post-Chronicle: OP_VERIF and OP_VERNOTIF are valid opcodes
+            return false;
+        }
         return opcode == OP_VERIF || opcode == OP_VERNOTIF;
     }
 
@@ -1122,6 +1334,18 @@ public class Interpreter {
         // Clone the transaction because executing the script involves editing it, and if we die, we'll leave
         // the tx half broken (also it's not so thread safe to work on it directly.
 
+        // Chronicle malleability relaxation: for tx version > 1, skip certain malleability flags
+        if (verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE) && txn.getVersion() > 1) {
+            verifyFlags = EnumSet.copyOf(verifyFlags);
+            verifyFlags.remove(VerifyFlag.SIGPUSHONLY);
+            verifyFlags.remove(VerifyFlag.CLEANSTACK);
+            verifyFlags.remove(VerifyFlag.MINIMALDATA);
+            verifyFlags.remove(VerifyFlag.MINIMALIF);
+            verifyFlags.remove(VerifyFlag.LOW_S);
+            verifyFlags.remove(VerifyFlag.NULLFAIL);
+            verifyFlags.remove(VerifyFlag.NULLDUMMY);
+        }
+
         if (verifyFlags.contains(VerifyFlag.SIGPUSHONLY) && !Script.isPushOnly(scriptSig)){
            throw new ScriptException(ScriptError.SCRIPT_ERR_SIG_PUSHONLY, "No pushdata operations allowed in scriptSig");
         }
@@ -1141,12 +1365,16 @@ public class Interpreter {
         LinkedList<byte[]> stack = new LinkedList<byte[]>();
         LinkedList<byte[]> p2shStack = null;
 
-        executeScript(transaction, scriptSigIndex, scriptSig,  stack, satoshis, verifyFlags);
+        // For Chronicle transactions, pass the scriptPubKey as the lockingScript
+        // so that SIGHASH_CHRONICLE can use it as scriptCode
+        Script chronicleLockingScript = verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE) ? scriptPubKey : null;
+
+        executeScript(transaction, scriptSigIndex, scriptSig,  stack, satoshis, verifyFlags, chronicleLockingScript);
         if (verifyFlags.contains(VerifyFlag.P2SH) && !(verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS))){
             p2shStack = new LinkedList<byte[]>(stack);
         }
 
-        executeScript(transaction, scriptSigIndex, scriptPubKey, stack, satoshis, verifyFlags);
+        executeScript(transaction, scriptSigIndex, scriptPubKey, stack, satoshis, verifyFlags, chronicleLockingScript);
 
         if (stack.size() == 0)
             throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "Stack empty at end of script execution.");
@@ -1183,7 +1411,7 @@ public class Interpreter {
             byte[] scriptPubKeyBytes = stack.pollLast().clone();
             Script scriptPubKeyP2SH = new Script(scriptPubKeyBytes);
 
-            executeScript(transaction, scriptSigIndex, scriptPubKeyP2SH, stack, satoshis, verifyFlags);
+            executeScript(transaction, scriptSigIndex, scriptPubKeyP2SH, stack, satoshis, verifyFlags, chronicleLockingScript);
 
             if (stack.isEmpty())
                 throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "P2SH stack empty at end of script execution.");
@@ -1210,7 +1438,7 @@ public class Interpreter {
 
     private static void executeCheckSig(Transaction txContainingThis, int index, Script script, LinkedList<byte[]> stack,
                                         int lastCodeSepLocation, int opcode, Coin value,
-                                        Set<VerifyFlag> verifyFlags) throws ScriptException, SignatureEncodingException, PubKeyEncodingException  {
+                                        Set<VerifyFlag> verifyFlags, @Nullable Script lockingScript) throws ScriptException, SignatureEncodingException, PubKeyEncodingException  {
         final boolean requireCanonical = verifyFlags.contains(VerifyFlag.STRICTENC)
                 || verifyFlags.contains(VerifyFlag.LOW_S);
         if (stack.size() < 2)
@@ -1256,7 +1484,8 @@ public class Interpreter {
             // TODO: Should check hash type is known
             SigHash sigHash = new SigHash();
 
-            byte[] hash = sigHash.createHash(txContainingThis, sig.sighashFlags, index, subScript, BigInteger.valueOf(value.value));
+            boolean afterChronicle = verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE);
+            byte[] hash = sigHash.createHash(txContainingThis, sig.sighashFlags, index, subScript, BigInteger.valueOf(value.value), lockingScript, afterChronicle);
             sigValid = ECKey.verify(hash, sig, pubKey);
 
         } catch (Exception e1) {
@@ -1405,15 +1634,23 @@ public class Interpreter {
         }
 
         if (flags.contains(VerifyFlag.STRICTENC) ) {
-            int sigHashType = sigBytes[sigBytes.length -1];
+            int sigHashType = sigBytes[sigBytes.length -1] & 0xff;
 
-
+            boolean usesChronicle = (sigHashType & SigHashType.CHRONICLE.value) != 0;
             boolean usesForkId = (sigHashType & SigHashType.FORKID.value) != 0;
             boolean forkIdEnabled = flags.contains(VerifyFlag.SIGHASH_FORKID);
+            boolean chronicleEnabled = flags.contains(VerifyFlag.AFTER_CHRONICLE);
+
+            // Pre-Chronicle: reject the Chronicle sighash flag
+            if (!chronicleEnabled && usesChronicle) {
+                throw new SignatureEncodingException(ScriptError.SCRIPT_ERR_SIG_HASHTYPE, "Chronicle sighash flag used but Chronicle is not enabled");
+            }
+
             if (!forkIdEnabled && usesForkId) {
                 throw new SignatureEncodingException(ScriptError.SCRIPT_ERR_ILLEGAL_FORKID, "ForkID is not enabled, yet the flag is set");
             }
-            if (forkIdEnabled && !usesForkId) {
+            // Post-Chronicle: Chronicle flag exempts the ForkID requirement
+            if (forkIdEnabled && !usesForkId && !usesChronicle) {
                 throw new SignatureEncodingException(ScriptError.SCRIPT_ERR_MUST_USE_FORKID, "ForkID flag is required");
             }
 
@@ -1476,7 +1713,7 @@ public class Interpreter {
 
     private static int executeMultiSig(Transaction txContainingThis, int index, Script script, LinkedList<byte[]> stack,
                                        int opCount, int lastCodeSepLocation, int opcode, Coin value,
-                                       Set<VerifyFlag> verifyFlags) throws ScriptException, PubKeyEncodingException, SignatureEncodingException {
+                                       Set<VerifyFlag> verifyFlags, @Nullable Script lockingScript) throws ScriptException, PubKeyEncodingException, SignatureEncodingException {
         final boolean requireCanonical = verifyFlags.contains(VerifyFlag.STRICTENC)
                 || verifyFlags.contains(VerifyFlag.DERSIG)
                 || verifyFlags.contains(VerifyFlag.LOW_S);
@@ -1571,7 +1808,8 @@ public class Interpreter {
                     sighashMode = sig.sighashFlags | SigHashType.FORKID.value;
                 }
 
-                byte[] hash = sigHash.createHash(txContainingThis, sighashMode, index, subScript, BigInteger.valueOf(value.value)); //FIXME: Use Coin instead ?
+                boolean afterChronicle = verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE);
+                byte[] hash = sigHash.createHash(txContainingThis, sighashMode, index, subScript, BigInteger.valueOf(value.value), lockingScript, afterChronicle); //FIXME: Use Coin instead ?
                 if (ECKey.verify(hash, sigBytes, pubKey)) {
                     sigs.pollFirst(); //pop a successfully validated sig
                 }

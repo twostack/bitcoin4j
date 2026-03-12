@@ -202,6 +202,10 @@ public class ScriptFlags {
     ///
     public static final int SCRIPT_ENABLE_MAGNETIC_OPCODES = (1 << 19);
 
+    /// Are the Chronicle upgrade opcodes enabled?
+    ///
+    public static final int SCRIPT_ENABLE_CHRONICLE = (1 << 20);
+
     /// *Below flags apply in the context of BIP 68*
     ///
     /// If this flag set, CTxIn::nSequence is NOT interpreted as a relative lock-time.

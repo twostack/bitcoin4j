@@ -20,6 +20,7 @@ public enum SigHashType {
     ALL(1),
     NONE(2),
     SINGLE(3),
+    CHRONICLE(0x20),
     FORKID (0x40),
     ANYONECANPAY(0x80), // Caution: Using this type in isolation is non-standard. Treated similar to ANYONECANPAY_ALL.
     ANYONECANPAY_ALL(0x81),
@@ -44,12 +45,17 @@ public enum SigHashType {
     }
 
     public static boolean hasValue(int value){
+        // Extract the base type (lower 5 bits, excluding CHRONICLE/FORKID/ANYONECANPAY)
+        int baseType = value & 0x1f;
 
-        for (SigHashType t : values()){
-            if (t.value == value)
-                return true;
+        // Base type must be ALL, NONE, or SINGLE (or UNSET which acts as ALL)
+        if (baseType != ALL.value && baseType != NONE.value && baseType != SINGLE.value && baseType != UNSET.value) {
+            return false;
         }
 
-        return false;
+        // The modifier bits (CHRONICLE 0x20, FORKID 0x40, ANYONECANPAY 0x80) can be combined freely
+        int modifiers = value & ~0x1f;
+        int validModifiers = CHRONICLE.value | FORKID.value | ANYONECANPAY.value;
+        return (modifiers & ~validModifiers) == 0;
     }
 }

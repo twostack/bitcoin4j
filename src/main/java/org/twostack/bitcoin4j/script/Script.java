@@ -87,7 +87,8 @@ public class Script {
         UTXO_AFTER_GENESIS,
         MINIMALIF,
         NULLFAIL,
-        COMPRESSED_PUBKEYTYPE
+        COMPRESSED_PUBKEYTYPE,
+        AFTER_CHRONICLE
     }
     public static final EnumSet<VerifyFlag> ALL_VERIFY_FLAGS = EnumSet.allOf(VerifyFlag.class);
 

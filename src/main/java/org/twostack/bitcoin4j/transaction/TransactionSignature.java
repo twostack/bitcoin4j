@@ -122,6 +122,18 @@ public class TransactionSignature extends ECKey.ECDSASignature {
         return sighashFlags;
     }
 
+    public static int calcSigHashValue(SigHashType mode, boolean anyoneCanPay, boolean useForkId, boolean useChronicle) {
+        Preconditions.checkArgument(SigHashType.ALL == mode || SigHashType.NONE == mode || SigHashType.SINGLE == mode);
+        int sighashFlags = mode.value;
+        if (anyoneCanPay)
+            sighashFlags |= SigHashType.ANYONECANPAY.value;
+        if (useForkId)
+            sighashFlags |= SigHashType.FORKID.value;
+        if (useChronicle)
+            sighashFlags |= SigHashType.CHRONICLE.value;
+        return sighashFlags;
+    }
+
 
     /**
      * Returns a decoded signature.
@@ -229,6 +241,14 @@ public class TransactionSignature extends ECKey.ECDSASignature {
         int forkId = (signature[signature.length-1] & 0xff) & SigHashType.FORKID.value; // mask the byte to prevent sign-extension hurting us
 
         return forkId == SigHashType.FORKID.value;
+    }
+
+    public static boolean hasChronicle(byte[] signature) {
+        if (signature.length == 0) {
+            return false;
+        }
+        int chronicleBit = (signature[signature.length - 1] & 0xff) & SigHashType.CHRONICLE.value;
+        return chronicleBit == SigHashType.CHRONICLE.value;
     }
 
     public boolean anyoneCanPay() {

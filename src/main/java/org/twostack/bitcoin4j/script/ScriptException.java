@@ -36,4 +36,19 @@ public class ScriptException extends VerificationException {
     public ScriptError getError() {
         return err;
     }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("ScriptException[");
+        sb.append(err.name());
+        sb.append("]: ");
+        sb.append(getMessage());
+        if (getCause() != null) {
+            sb.append(" (caused by: ");
+            sb.append(getCause().toString());
+            sb.append(")");
+        }
+        return sb.toString();
+    }
 }
