@@ -10,7 +10,7 @@ import java.io.IOException;
 
 /**
  * Unlocking script builder for HODLocker timelock scripts.
- * Pattern: <sig> <pubKey> <preImage>
+ * Pattern: {@code <sig> <pubKey> <preImage>}
  */
 public class HodlUnlockBuilder extends UnlockingScriptBuilder {
 

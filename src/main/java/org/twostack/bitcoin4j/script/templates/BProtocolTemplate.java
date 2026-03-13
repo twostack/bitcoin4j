@@ -10,7 +10,7 @@ import static org.twostack.bitcoin4j.script.ScriptOpCodes.*;
 
 /**
  * Template for B:// protocol data scripts.
- * Pattern: OP_FALSE OP_RETURN <B prefix> <data> <mediaType> [<encoding>] [<filename>]
+ * Pattern: {@code OP_FALSE OP_RETURN <B prefix> <data> <mediaType> [<encoding>] [<filename>]}
  *
  * The prefix is the Bitcoin address: "19HxigV4QyBv3tHpQVcUEQyq1pzZVdoAut"
  */

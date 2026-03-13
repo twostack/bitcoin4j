@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * Template for Pay-to-Public-Key scripts.
- * Pattern: <pubKey> OP_CHECKSIG
+ * Pattern: {@code <pubKey> OP_CHECKSIG}
  */
 public class P2PKTemplate implements ScriptTemplate {
 

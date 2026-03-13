@@ -10,7 +10,7 @@ import static org.twostack.bitcoin4j.script.ScriptOpCodes.*;
 
 /**
  * Template for Author Identity protocol scripts.
- * Pattern: OP_FALSE OP_RETURN <AuthorIdentity prefix> <algorithm> <address> <signature> [<field indices...>]
+ * Pattern: {@code OP_FALSE OP_RETURN <AuthorIdentity prefix> <algorithm> <address> <signature> [<field indices...>]}
  *
  * The prefix is the Bitcoin address: "15PciHG22SNLQJXMoSUaWVi7WSqc7hCfva"
  */

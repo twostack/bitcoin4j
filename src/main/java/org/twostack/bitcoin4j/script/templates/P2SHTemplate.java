@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * Template for Pay-to-Script-Hash scripts.
- * Pattern: OP_HASH160 <scriptHash> OP_EQUAL
+ * Pattern: {@code OP_HASH160 <scriptHash> OP_EQUAL}
  */
 public class P2SHTemplate implements ScriptTemplate {
 

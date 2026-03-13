@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * Template for Pay-to-Public-Key-Hash scripts.
- * Pattern: OP_DUP OP_HASH160 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG
+ * Pattern: {@code OP_DUP OP_HASH160 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG}
  */
 public class P2PKHTemplate implements ScriptTemplate {
 

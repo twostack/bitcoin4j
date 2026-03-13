@@ -11,7 +11,7 @@ import static org.twostack.bitcoin4j.script.ScriptOpCodes.*;
 
 /**
  * Template for HODLocker timelock scripts.
- * Pattern: <lockHeight> OP_CHECKLOCKTIMEVERIFY OP_DROP OP_DUP OP_HASH160 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG
+ * Pattern: {@code <lockHeight> OP_CHECKLOCKTIMEVERIFY OP_DROP OP_DUP OP_HASH160 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG}
  */
 public class HodlockerTemplate implements ScriptTemplate {
 

@@ -9,7 +9,7 @@ import static org.twostack.bitcoin4j.script.ScriptOpCodes.*;
 
 /**
  * Locking script builder for HODLocker timelock scripts.
- * Pattern: <lockHeight> OP_CHECKLOCKTIMEVERIFY OP_DROP OP_DUP OP_HASH160 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG
+ * Pattern: {@code <lockHeight> OP_CHECKLOCKTIMEVERIFY OP_DROP OP_DUP OP_HASH160 <pubKeyHash> OP_EQUALVERIFY OP_CHECKSIG}
  */
 public class HodlLockBuilder extends LockingScriptBuilder {
 
