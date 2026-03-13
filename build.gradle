@@ -1,6 +1,5 @@
 plugins {
     id 'java-library'
-    id 'maven'
     id 'maven-publish'
     id 'signing'
 }
@@ -46,17 +45,13 @@ publishing {
 
     repositories {
         maven {
-            def releaseRepoUrl = "https://s01.oss.sonatype.org/content/repositories/releases/"
-            def snapshotRepoUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
-
-            url = version.endsWith('SNAPSHOT') ? snapshotRepoUrl : releaseRepoUrl
-            name = "OSSRH"
+            url = "https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/"
+            name = "CentralPortal"
             credentials {
-                username = findProperty('ossrhUsername') ? ossrhUsername : ''
-                password = findProperty('ossrhPassword') ? ossrhPassword : ''
+                username = findProperty('centralPortalUsername') ?: ''
+                password = findProperty('centralPortalPassword') ?: ''
             }
         }
-
     }
     publications {
         maven(MavenPublication) {
