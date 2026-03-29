@@ -127,18 +127,25 @@ public class TransactionSigner {
             PrivateKey signingKey,
             int sigHashType) throws TransactionException, IOException, SigHashException, SignatureDecodeException {
 
-        //FIXME: This is a test work-around for why I can't sign an unsigned raw txn
-
-
-        //FIXME: This should account for ANYONECANPAY mask that limits outputs to sign over
-        ///      NOTE: Stripping Subscript should be done inside SIGHASH class
         Script subscript = utxo.getScript();
         SigHash sigHash = new SigHash();
 
-        //NOTE: Return hash in LittleEndian (already double-sha256 applied)
-        preImage = sigHash.getSighashPreimage(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
+        // Use createHash() which does NOT strip OP_CODESEPARATOR from the subscript.
+        // This matches the Dart TransactionSigner which calls Sighash.hash() (no strip).
+        //
+        // getSighashPreimage() strips to the first OP_CODESEPARATOR, which is correct
+        // for OP_PUSH_TX preimage computation (where the CHECKSIG is always after
+        // OP_CODESEPARATOR) but wrong for signing inputs whose CHECKSIG may be in a
+        // code path that does NOT execute OP_CODESEPARATOR (e.g. PP2-FT burn path).
+        //
+        // The interpreter adjusts the subscript based on which OP_CODESEPARATOR was
+        // actually executed during script evaluation. The signer must use the full
+        // scriptPubKey so the sighash matches when no OP_CODESEPARATOR is executed.
+        byte[] hash = sigHash.createHash(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
 
-        TransactionSignature sig = signPreimage(signingKey, preImage, sigHashType);
+        byte[] signedBytes = signingKey.sign(hash);
+        ECKey.ECDSASignature ecSig = ECKey.ECDSASignature.decodeFromDER(signedBytes);
+        TransactionSignature sig = new TransactionSignature(ecSig.r, ecSig.s, sigHashType);
 
         TransactionInput input = unsignedTxn.getInputs().get(inputIndex);
         UnlockingScriptBuilder scriptBuilder = input.getUnlockingScriptBuilder();
