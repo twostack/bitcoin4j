@@ -451,8 +451,12 @@ public class SigHash {
 
 
 
-    /// Strips all OP_CODESEPARATOR instructions from the script.
-    // FIXME: Test if everything "BEFORE" first SEPARATOR needs stripping, or just the SEPARATORS themselves
+    /// Strips all OP_CODESEPARATOR instructions from the script, preserving
+    /// everything else.  This is the legacy (pre-ForkId) behaviour mandated by
+    /// the reference implementation's CTransactionSignatureSerializer::SerializeScriptCode,
+    /// which removes every OP_CODESEPARATOR byte but keeps all surrounding opcodes/data intact.
+    /// The BIP143/ForkId path does NOT call this method — it relies on the interpreter's
+    /// lastCodeSepLocation to slice the subscript before hashing.
     Script removeCodeseparators(Script script) {
         List<ScriptChunk> newChunks = new ArrayList<ScriptChunk>();
         List<ScriptChunk> oldChunks = script.getChunks();
@@ -460,13 +464,6 @@ public class SigHash {
             if (oldChunks.get(i).opcode != ScriptOpCodes.OP_CODESEPARATOR) {
                 newChunks.add(oldChunks.get(i));
             }
-
-            /* FIXME: Check if this needs to be activated. I.e. stop adding code once hitting first OP_CODESEPARATOR
-            if (oldChunks.get(i).opcode == ScriptOpCodes.OP_CODESEPARATOR) {
-                break;
-            }
-             */
-
         }
 
         return new Script(newChunks);
