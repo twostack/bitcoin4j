@@ -141,7 +141,10 @@ public class TransactionSigner {
         // The interpreter adjusts the subscript based on which OP_CODESEPARATOR was
         // actually executed during script evaluation. The signer must use the full
         // scriptPubKey so the sighash matches when no OP_CODESEPARATOR is executed.
-        byte[] hash = sigHash.createHash(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount());
+        //
+        // SIGHASH_CHRONICLE selects the original (OTDA/legacy) digest even when FORKID is also set.
+        boolean chronicle = (sigHashType & SigHashType.CHRONICLE.value) != 0;
+        byte[] hash = sigHash.createHash(unsignedTxn, sigHashType, inputIndex, subscript, utxo.getAmount(), null, chronicle);
 
         byte[] signedBytes = signingKey.sign(hash);
         ECKey.ECDSASignature ecSig = ECKey.ECDSASignature.decodeFromDER(signedBytes);

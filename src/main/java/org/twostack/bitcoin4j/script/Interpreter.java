@@ -1245,7 +1245,9 @@ public class Interpreter {
                 }
             }
 
-            if (stack.size() + altstack.size() > MAX_STACK_SIZE || stack.size() + altstack.size() < 0)
+            // The 1000-element stack limit is pre-Genesis consensus; after Genesis
+            // BSV bounds stack memory by policy instead.
+            if ((!utxoAfterGenesis && stack.size() + altstack.size() > MAX_STACK_SIZE) || stack.size() + altstack.size() < 0)
                 throw new ScriptException(ScriptError.SCRIPT_ERR_STACK_SIZE, "Stack size exceeded range");
 
             // Invoke trace callback if provided
@@ -1308,10 +1310,40 @@ public class Interpreter {
         // Alternatively we could test all inputs, but testing just this input
         // minimizes the data required to prove correct CHECKLOCKTIMEVERIFY
         // execution.
-        if (!txContainingThis.getInputs().get(index).isFinal())
+        if (txContainingThis.getInputs().get(index).isFinal())
             throw new ScriptException(ScriptError.SCRIPT_ERR_UNSATISFIED_LOCKTIME, "Transaction contains a final transaction input for a CHECKLOCKTIMEVERIFY script.");
     }
 
+
+    /**
+     * The scriptCode a signature check signs, before signature removal (FindAndDelete).
+     *
+     * In the locking script, and in the unlocking script before Chronicle, it is the currently
+     * executing script from just after its most recent OP_CODESEPARATOR.
+     *
+     * After Chronicle, a check executing in the UNLOCKING script signs that same tail of the
+     * unlocking script followed by the WHOLE locking script. This is the SV node 1.2.0 rule, and
+     * matches dartsv. It is gated by Chronicle activation alone, not by the transaction version
+     * or the sighash flags.
+     *
+     * @param lockingScript the locking script that script is being evaluated against. Callers pass
+     *                      the locking script itself when evaluating it, so script and lockingScript
+     *                      only differ while running the unlocking script.
+     */
+    static byte[] scriptCodeFor(Script script, int lastCodeSepLocation, Set<VerifyFlag> verifyFlags, @Nullable Script lockingScript) {
+        byte[] prog = script.getProgram();
+        byte[] tail = Arrays.copyOfRange(prog, lastCodeSepLocation, prog.length);
+
+        boolean inUnlockingScript = lockingScript != null && script != lockingScript;
+        if (inUnlockingScript && verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE)) {
+            byte[] locking = lockingScript.getProgram();
+            byte[] result = Arrays.copyOf(tail, tail.length + locking.length);
+            System.arraycopy(locking, 0, result, tail.length, locking.length);
+            return result;
+        }
+
+        return tail;
+    }
 
     public void correctlySpends( Script scriptSig, Script scriptPubKey, Transaction txn, int scriptSigIndex, Set<VerifyFlag> verifyFlags) throws ScriptException {
         correctlySpends(scriptSig, scriptPubKey, txn, scriptSigIndex,  verifyFlags, Coin.ZERO);
@@ -1365,16 +1397,14 @@ public class Interpreter {
         LinkedList<byte[]> stack = new LinkedList<byte[]>();
         LinkedList<byte[]> p2shStack = null;
 
-        // For Chronicle transactions, pass the scriptPubKey as the lockingScript
-        // so that SIGHASH_CHRONICLE can use it as scriptCode
-        Script chronicleLockingScript = verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE) ? scriptPubKey : null;
-
-        executeScript(transaction, scriptSigIndex, scriptSig,  stack, satoshis, verifyFlags, chronicleLockingScript);
+        // Tell executeScript which script is the locking script, so that signature checks in the
+        // unlocking script can build the post-Chronicle scriptCode (see scriptCodeFor()).
+        executeScript(transaction, scriptSigIndex, scriptSig,  stack, satoshis, verifyFlags, scriptPubKey);
         if (verifyFlags.contains(VerifyFlag.P2SH) && !(verifyFlags.contains(VerifyFlag.UTXO_AFTER_GENESIS))){
             p2shStack = new LinkedList<byte[]>(stack);
         }
 
-        executeScript(transaction, scriptSigIndex, scriptPubKey, stack, satoshis, verifyFlags, chronicleLockingScript);
+        executeScript(transaction, scriptSigIndex, scriptPubKey, stack, satoshis, verifyFlags, scriptPubKey);
 
         if (stack.size() == 0)
             throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "Stack empty at end of script execution.");
@@ -1411,7 +1441,7 @@ public class Interpreter {
             byte[] scriptPubKeyBytes = stack.pollLast().clone();
             Script scriptPubKeyP2SH = new Script(scriptPubKeyBytes);
 
-            executeScript(transaction, scriptSigIndex, scriptPubKeyP2SH, stack, satoshis, verifyFlags, chronicleLockingScript);
+            executeScript(transaction, scriptSigIndex, scriptPubKeyP2SH, stack, satoshis, verifyFlags, scriptPubKeyP2SH);
 
             if (stack.isEmpty())
                 throw new ScriptException(ScriptError.SCRIPT_ERR_EVAL_FALSE, "P2SH stack empty at end of script execution.");
@@ -1446,8 +1476,7 @@ public class Interpreter {
         byte[] pubKey = stack.pollLast().clone();
         byte[] sigBytes = stack.pollLast().clone();
 
-        byte[] prog = script.getProgram();
-        byte[] connectedScript = Arrays.copyOfRange(prog, lastCodeSepLocation, prog.length);
+        byte[] connectedScript = scriptCodeFor(script, lastCodeSepLocation, verifyFlags, lockingScript);
 
         UnsafeByteArrayOutputStream outStream = new UnsafeByteArrayOutputStream(sigBytes.length + 1);
         try {
@@ -1485,7 +1514,7 @@ public class Interpreter {
             SigHash sigHash = new SigHash();
 
             boolean afterChronicle = verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE);
-            byte[] hash = sigHash.createHash(txContainingThis, sig.sighashFlags, index, subScript, BigInteger.valueOf(value.value), lockingScript, afterChronicle);
+            byte[] hash = sigHash.createHash(txContainingThis, sig.sighashFlags, index, subScript, BigInteger.valueOf(value.value), null, afterChronicle);
             sigValid = ECKey.verify(hash, sig, pubKey);
 
         } catch (Exception e1) {
@@ -1755,8 +1784,7 @@ public class Interpreter {
             sigs.add(sig);
         }
 
-        byte[] prog = script.getProgram();
-        byte[] connectedScript = Arrays.copyOfRange(prog, lastCodeSepLocation, prog.length);
+        byte[] connectedScript = scriptCodeFor(script, lastCodeSepLocation, verifyFlags, lockingScript);
 
         for (byte[] sig : sigs) {
             UnsafeByteArrayOutputStream outStream = new UnsafeByteArrayOutputStream(sig.length + 1);
@@ -1809,7 +1837,7 @@ public class Interpreter {
                 }
 
                 boolean afterChronicle = verifyFlags.contains(VerifyFlag.AFTER_CHRONICLE);
-                byte[] hash = sigHash.createHash(txContainingThis, sighashMode, index, subScript, BigInteger.valueOf(value.value), lockingScript, afterChronicle); //FIXME: Use Coin instead ?
+                byte[] hash = sigHash.createHash(txContainingThis, sighashMode, index, subScript, BigInteger.valueOf(value.value), null, afterChronicle); //FIXME: Use Coin instead ?
                 if (ECKey.verify(hash, sigBytes, pubKey)) {
                     sigs.pollFirst(); //pop a successfully validated sig
                 }

@@ -3,12 +3,24 @@ package org.twostack.bitcoin4j.transaction;
 import org.twostack.bitcoin4j.exception.SignatureDecodeException;
 import org.twostack.bitcoin4j.script.*;
 
+import javax.annotation.Nullable;
 import java.util.List;
 
 public class P2PKUnlockBuilder extends UnlockingScriptBuilder{
 
-    public P2PKUnlockBuilder(TransactionSignature signature){
-        addSignature(signature);
+    /**
+     * Creates an unlocker with no signature; the TransactionSigner will add it at signing time.
+     */
+    public P2PKUnlockBuilder(){
+    }
+
+    /**
+     * @param signature the signature to use, or null to have the TransactionSigner supply it later
+     */
+    public P2PKUnlockBuilder(@Nullable TransactionSignature signature){
+        if (signature != null) {
+            addSignature(signature);
+        }
     }
 
     public P2PKUnlockBuilder(Script script){

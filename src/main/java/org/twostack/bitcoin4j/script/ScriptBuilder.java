@@ -86,9 +86,10 @@ public class ScriptBuilder {
             opcode = OP_0;
         } else if (data.length == 1) {
             byte b = data[0];
-            if (b >= 1 && b <= 16)
+            if (b >= 1 && b <= 16) {
                 opcode = Script.encodeToOpN(b);
-            else
+                copy = null; //OP_1..OP_16 carry their value in the opcode; a chunk with data attached can't be serialised
+            } else
                 opcode = 1;
         } else if (data.length < OP_PUSHDATA1) {
             opcode = data.length;

@@ -157,7 +157,7 @@ public class TransactionInput {
     }
 
     public boolean isFinal() {
-        return _sequenceNumber != MAX_SEQ_NUMBER;
+        return _sequenceNumber == MAX_SEQ_NUMBER;
     }
 
     public void setPrevTxnOutputIndex(int i) {

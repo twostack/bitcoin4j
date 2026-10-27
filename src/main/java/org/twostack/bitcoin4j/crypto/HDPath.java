@@ -163,7 +163,8 @@ public class HDPath extends AbstractList<ChildNumber> {
 
         for (String n : parsedNodes) {
             if (n.isEmpty()) continue;
-            boolean isHard = n.endsWith("H");
+            //accept both the "H" form and the conventional BIP32 apostrophe form (e.g. m/44'/0'/0')
+            boolean isHard = n.endsWith("H") || n.endsWith("h") || n.endsWith("'");
             if (isHard) n = n.substring(0, n.length() - 1).trim();
             int nodeNumber = Integer.parseInt(n);
             nodes.add(new ChildNumber(nodeNumber, isHard));

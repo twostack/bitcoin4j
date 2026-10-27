@@ -1,3 +1,48 @@
+#Release 1.8.0
+### Bug Fixes
+- Multisig: P2MSUnlockBuilder now appends the sighash byte to each signature. Multisig spends were always rejected.
+- PrivateKey.fromWIF() honours uncompressed keys. getPublicKey(), the derived Address and toWIF() now
+  match the original key. Added PrivateKey.isCompressed().
+- TransactionSigner supports SIGHASH_CHRONICLE (selects the original/OTDA digest).
+- spendFromOutput(signer, ...) signed over the unlocking script instead of the spent output's locking script.
+  Use the new overload that takes the locking script; the old overload is deprecated and throws.
+- spendFromUtxoMap(signer, ...) accepts "scriptPubKey" as hex (previously only ASM, which nobody passes).
+- ScriptBuilder.data() with a single byte of 1..16 produced an unserialisable chunk. It now emits OP_1..OP_16.
+  The OP_RETURN template reads these back as one-byte data chunks.
+- TransactionInput.isFinal() was inverted. (The interpreter's CHECKLOCKTIMEVERIFY check was adjusted to match.)
+- P2PKUnlockBuilder accepts a null signature (or the new no-arg constructor) so the signer can supply it.
+- P2MSLockBuilder no longer sorts the caller's public key list in place.
+- TransactionOutpoint constructors are public, so spendFromOutpoint() is usable.
+- HDPath.parsePath() accepts the conventional apostrophe (44') for hardened steps, as well as H/h.
+- Interpreter: the 1000-item stack limit only applies to pre-Genesis UTXOs.
+- Interpreter: after Chronicle, a signature check in the unlocking script signs the unlocking script tail
+  followed by the whole locking script (SV node 1.2.0 rule; matches dartsv 3.1.1). SigHash no longer
+  substitutes the locking script during interpreter verification.
+
+### TransactionBuilder
+- The change output is calculated when build() is called, and is always the last output. Outputs, fees and
+  fee rates set after sendChangeTo() are now accounted for.
+- Fee estimate: fixed integer division that rounded every fee below 1000 bytes down to the minimum, and
+  input sizes are estimated from the spent locking script (P2PK, multisig) rather than assuming P2PKH.
+  The change output's size is included.
+- Unspendable data outputs (OP_RETURN / OP_FALSE OP_RETURN) are exempt from the dust check.
+- Added withTxVersion(), withOption(TransactionOption), lockUntilUnixTime(). When a lock time is set,
+  final inputs are given a non-final sequence number so that the lock time is enforced.
+- setFee() returns the builder for chaining. Source compatible, but code compiled against an earlier
+  release that calls setFee() must be recompiled.
+- lockUntilBlockHeight() is implemented (previously commented out).
+
+### Other
+- Block exposes header fields: getVersion(), getPrevBlockHash(), getTime(), getDifficultyTarget(), getNonce().
+- VerifyFlag.MONOLITH_OPCODES is documented as a no-op (those opcodes are always enabled).
+
+### Build & Publishing
+- Gradle wrapper upgraded to 8.12 (6.3 cannot run on modern JDKs). Builds on JDK 11-21.
+- Removed the obsolete testCompile dependency that broke clean builds.
+- Artifacts are only required to be signed when publishing to a remote repository.
+- New `publishToCentralPortal` task: uploads via the OSSRH Staging API and then transfers the deployment
+  to the Central Portal, which the plain `publish` task never did.
+
 ### Interpreter Fixes
 - Stack based operations in interpreter could potentially fail due to memory corruption
   Only affected validation of spending via Interpreter.correctlySpends() 

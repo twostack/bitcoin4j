@@ -68,20 +68,20 @@ public class TransactionOutpoint {
         this.lockingScript = lockingScript;
     }
 
-   TransactionOutpoint(String transactionId, Integer outputIndex, BigInteger satoshis, Script lockingScript){
+   public TransactionOutpoint(String transactionId, Integer outputIndex, BigInteger satoshis, Script lockingScript){
       this.transactionId = transactionId;
       this.outputIndex = outputIndex;
       this.satoshis  = satoshis;
       this.lockingScript = lockingScript;
    }
-   TransactionOutpoint(){ }
+   public TransactionOutpoint(){ }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         TransactionOutpoint outpoint = (TransactionOutpoint) o;
-        return transactionId.equals(outpoint.transactionId) && outputIndex.equals(outpoint.outputIndex) && satoshis.equals(outpoint.satoshis) && Objects.equals(lockingScript, outpoint.lockingScript);
+        return Objects.equals(transactionId, outpoint.transactionId) && Objects.equals(outputIndex, outpoint.outputIndex) && Objects.equals(satoshis, outpoint.satoshis) && Objects.equals(lockingScript, outpoint.lockingScript);
     }
 
     @Override

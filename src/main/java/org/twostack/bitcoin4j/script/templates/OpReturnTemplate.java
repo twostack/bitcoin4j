@@ -62,9 +62,12 @@ public class OpReturnTemplate implements ScriptTemplate {
         }
 
         for (int i = dataStart; i < chunks.size(); i++) {
-            byte[] data = chunks.get(i).data;
-            if (data != null) {
-                dataChunks.add(data);
+            ScriptChunk chunk = chunks.get(i);
+            if (chunk.data != null) {
+                dataChunks.add(chunk.data);
+            } else if (chunk.opcode >= ScriptOpCodes.OP_1 && chunk.opcode <= ScriptOpCodes.OP_16) {
+                //one-byte pushes of 1..16 are minimally encoded as OP_1..OP_16
+                dataChunks.add(new byte[]{(byte) Script.decodeFromOpN(chunk.opcode)});
             }
         }
 

@@ -3,6 +3,7 @@ package org.twostack.bitcoin4j.transaction;
 import org.twostack.bitcoin4j.exception.SignatureDecodeException;
 import org.twostack.bitcoin4j.script.*;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -55,8 +56,12 @@ public class P2MSUnlockBuilder extends UnlockingScriptBuilder{
         ScriptBuilder builder = new ScriptBuilder();
         builder.op(ScriptOpCodes.OP_0); //push a value to stack first. this will be ignored by multisig bug, but is required(by the bug).
 
-        for (TransactionSignature signature : signatures) {
-            builder.data(signature.getSignatureBytes());
+        for (TransactionSignature signature : getSignatures()) {
+            try {
+                builder.data(signature.toTxFormat()); //DER signature followed by the sighash byte
+            } catch (IOException ex) {
+                throw new ScriptException(ScriptError.SCRIPT_ERR_UNKNOWN_ERROR, "Failed to encode signature: " + ex.getMessage());
+            }
         }
 
         return builder.build();

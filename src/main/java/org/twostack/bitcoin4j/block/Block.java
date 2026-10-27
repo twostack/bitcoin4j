@@ -17,6 +17,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -207,6 +208,36 @@ public class Block {
     /**
      * Returns the merkle root in big endian form, calculating it from transactions if necessary.
      */
+    /** @return the block version */
+    public long getVersion() {
+        return version;
+    }
+
+    /** @return the hash of the previous block in the chain */
+    public Sha256Hash getPrevBlockHash() {
+        return prevBlockHash;
+    }
+
+    /** @return the block timestamp, in seconds since the Unix epoch */
+    public long getTime() {
+        return time;
+    }
+
+    /** @return the block timestamp as a Date */
+    public Date getTimeAsDate() {
+        return new Date(time * 1000);
+    }
+
+    /** @return the difficulty target in compact form ("nBits") */
+    public long getDifficultyTarget() {
+        return difficultyTarget;
+    }
+
+    /** @return the nonce */
+    public long getNonce() {
+        return nonce;
+    }
+
     public Sha256Hash getMerkleRoot() {
         if (merkleRoot == null) {
             //TODO check if this is really necessary.

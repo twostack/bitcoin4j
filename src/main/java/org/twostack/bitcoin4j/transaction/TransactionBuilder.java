@@ -18,10 +18,14 @@ package org.twostack.bitcoin4j.transaction;
 
 import org.twostack.bitcoin4j.Address;
 import org.twostack.bitcoin4j.Utils;
+import org.twostack.bitcoin4j.VarInt;
 import org.twostack.bitcoin4j.exception.SigHashException;
 import org.twostack.bitcoin4j.exception.SignatureDecodeException;
 import org.twostack.bitcoin4j.exception.TransactionException;
 import org.twostack.bitcoin4j.script.Script;
+import org.twostack.bitcoin4j.script.ScriptChunk;
+import org.twostack.bitcoin4j.script.ScriptOpCodes;
+import org.twostack.bitcoin4j.script.ScriptPattern;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
@@ -68,6 +72,16 @@ public class TransactionBuilder {
 
     private long nLockTime = 0;
 
+    /// Sequence number given to final inputs when a lock time is set, so the lock time is enforced
+    static final long DEFAULT_LOCKTIME_SEQNUMBER = TransactionInput.MAX_SEQ_NUMBER - 1;
+
+    /// Transaction version to build with. null means the Transaction default.
+    private Long txVersion = null;
+
+    //Map the outpoints we're spending from ("transactionId:outputIndex"), to their locking script, where known.
+    //Used to estimate the size of the unlocking script for fee calculation.
+    private Map<String, Script> lockingScriptMap = new HashMap<>();
+
     private HashMap<String, SignerDto> signerMap = new HashMap();
 
 
@@ -103,6 +117,14 @@ public class TransactionBuilder {
      "scriptPubKey", [String]
      }
      */
+    /// scriptPubKey in a utxo map may be given as hex (preferred) or as ASM
+    private static Script parseScriptPubKey(String scriptPubKey) {
+        if (scriptPubKey.length() % 2 == 0 && scriptPubKey.matches("[0-9a-fA-F]*")) {
+            return new Script(HEX.decode(scriptPubKey));
+        }
+        return Script.fromAsmString(scriptPubKey);
+    }
+
     public TransactionBuilder spendFromUtxoMap(TransactionSigner signer, Map<String, Object> utxoMap, @Nullable  UnlockingScriptBuilder unlocker){
 
         String transactionId = (String) utxoMap.get("transactionId");
@@ -112,13 +134,14 @@ public class TransactionBuilder {
 
         TransactionOutpoint outpoint = new TransactionOutpoint();
         outpoint.setOutputIndex(outputIndex);
-        outpoint.setLockingScript(Script.fromAsmString((String)utxoMap.get("scriptPubKey")));
+        outpoint.setLockingScript(parseScriptPubKey((String)utxoMap.get("scriptPubKey")));
         outpoint.setSatoshis((BigInteger)utxoMap.get("satoshis"));
         outpoint.setTransactionId(transactionId);
 
         String mapKey = transactionId + ":" + outputIndex;
 
         this.signerMap.put(mapKey, new SignerDto(signer, outpoint));
+        lockingScriptMap.put(mapKey, outpoint.getLockingScript());
 
         if (unlocker == null){
             unlocker = new DefaultUnlockBuilder();
@@ -191,6 +214,7 @@ public class TransactionBuilder {
 
         String mapKey = transactionId + ":" + outputIndex;
         this.signerMap.put(mapKey, new SignerDto(signer, outpoint));
+        lockingScriptMap.put(mapKey, output.getScript());
 
         //update the spending transactionInput
         TransactionInput input = new TransactionInput(
@@ -217,6 +241,7 @@ public class TransactionBuilder {
 
         String mapKey = txn.getTransactionId() + ":" + outputIndex;
         spendingMap.put(mapKey, txn.getOutputs().get(outputIndex).getAmount());
+        lockingScriptMap.put(mapKey, txn.getOutputs().get(outputIndex).getScript());
 
         inputs.add(input);
         return this;
@@ -227,6 +252,9 @@ public class TransactionBuilder {
 
         String mapKey = outpoint.getTransactionId() + ":" + outpoint.getOutputIndex();
         this.signerMap.put(mapKey, new SignerDto(signer, outpoint));
+        if (outpoint.getLockingScript() != null) {
+            lockingScriptMap.put(mapKey, outpoint.getLockingScript());
+        }
 
         TransactionInput input = new TransactionInput(
                 HEX.decode(outpoint.getTransactionId()),
@@ -253,6 +281,9 @@ public class TransactionBuilder {
 
         String mapKey = outpoint.getTransactionId() + ":" + outpoint.getOutputIndex();
         spendingMap.put(mapKey, outpoint.getSatoshis());
+        if (outpoint.getLockingScript() != null) {
+            lockingScriptMap.put(mapKey, outpoint.getLockingScript());
+        }
 
         inputs.add(input);
         return this;
@@ -275,13 +306,30 @@ public class TransactionBuilder {
     }
 
 
+    /**
+     * @deprecated A signer has to sign over the spent Output's locking script, which this overload
+     * does not receive. Use {@link #spendFromOutput(TransactionSigner, String, int, BigInteger, Script, long, UnlockingScriptBuilder)}.
+     * @throws IllegalArgumentException always
+     */
+    @Deprecated
     public TransactionBuilder spendFromOutput(TransactionSigner signer, String utxoTxnId, int outputIndex, BigInteger amount, long sequenceNumber, UnlockingScriptBuilder unlocker) {
+        throw new IllegalArgumentException("Signing requires the locking script of the output being spent. " +
+                "Use spendFromOutput(signer, utxoTxnId, outputIndex, amount, lockingScript, sequenceNumber, unlocker)");
+    }
+
+    /**
+     * Spend from an output, and have the signer sign the corresponding input when the transaction is built.
+     *
+     * @param lockingScript the locking script (scriptPubKey) of the output being spent. The signature commits to it.
+     */
+    public TransactionBuilder spendFromOutput(TransactionSigner signer, String utxoTxnId, int outputIndex, BigInteger amount, Script lockingScript, long sequenceNumber, UnlockingScriptBuilder unlocker) {
 
         TransactionOutpoint outpoint = new TransactionOutpoint();
         outpoint.setOutputIndex(outputIndex);
-        outpoint.setLockingScript(unlocker.getUnlockingScript());
+        outpoint.setLockingScript(lockingScript);
         outpoint.setSatoshis(amount);
         outpoint.setTransactionId(utxoTxnId);
+        lockingScriptMap.put(utxoTxnId + ":" + outputIndex, lockingScript);
 
         String mapKey = utxoTxnId + ":" + outputIndex;
         this.signerMap.put(mapKey, new SignerDto(signer, outpoint));
@@ -337,9 +385,9 @@ public class TransactionBuilder {
      */
     public TransactionBuilder sendChangeTo(LockingScriptBuilder locker){
 
+        //the change amount is calculated when the transaction is built, so that
+        //outputs, inputs and fee settings added after this call are accounted for
         changeScriptBuilder = locker;
-
-        updateChangeOutput();
 
         changeScriptFlag = true;
 
@@ -349,92 +397,99 @@ public class TransactionBuilder {
     public TransactionBuilder withFeePerKb(long fee){
         feePerKb = fee;
 
-        if (changeScriptBuilder != null)
-            updateChangeOutput();
-
-        return this;
-    }
-    /*
-
-    /// Set the locktime flag on the transaction to prevent it becoming
-    /// spendable before specified date
-    ///
-    /// [future] - The date in future before which transaction will not be spendable.
-    TransactionBuilder lockUntilDate(DateTime future) {
-        if (future.millisecondsSinceEpoch < NLOCKTIME_BLOCKHEIGHT_LIMIT) {
-            throw LockTimeException('Block time is set too early');
-        }
-
-        for (var input in _txnInputs) {
-            if (input.sequenceNumber == DEFAULT_SEQNUMBER) {
-                input.sequenceNumber = DEFAULT_LOCKTIME_SEQNUMBER;
-            }
-        }
-
-        _nLockTime = future.millisecondsSinceEpoch;
-
         return this;
     }
 
-    /// Set the locktime flag on the transaction to prevent it becoming
-    /// spendable before specified date
-    ///
-    /// [timestamp] - The date in future before which transaction will not be spendable.
-    TransactionBuilder lockUntilUnixTime(int timestamp) {
-        if (timestamp < NLOCKTIME_BLOCKHEIGHT_LIMIT) {
-            throw LockTimeException('Block time is set too early');
-        }
-
-        _nLockTime = timestamp;
-
-        return this;
-    }
-
-    /// Set the locktime flag on the transaction to prevent it becoming
-    /// spendable before specified block height
-    ///
-    /// [blockHeight] - The block height before which transaction will not be spendable.
-    TransactionBuilder lockUntilBlockHeight(int blockHeight) {
-        if (blockHeight > Transaction.NLOCKTIME_BLOCKHEIGHT_LIMIT) {
-            throw LockTimeException('Block height must be less than 500000000');
-        }
-
-        if (blockHeight < 0) {
-            throw LockTimeException("Block height can't be negative");
-        }
-
-
-        for (var input in _txnInputs) {
-            if (input.sequenceNumber == Transaction.DEFAULT_SEQNUMBER) {
-                input.sequenceNumber = Transaction.DEFAULT_LOCKTIME_SEQNUMBER;
-            }
-        }
-
-        //FIXME: assumption on the length of _nLockTime. Risks indexexception
-        _nLockTime = blockHeight;
-
-        return this;
-    }
+    /**
+     * Set the version number of the transaction that will be built. Defaults to the Transaction default (2).
      */
+    public TransactionBuilder withTxVersion(long version){
+        txVersion = version;
+        return this;
+    }
+
+    /**
+     * Relax one of the checks performed by {@link #build(boolean)}.
+     */
+    public TransactionBuilder withOption(TransactionOption option){
+        if (option == TransactionOption.DISABLE_ALL) {
+            transactionOptions.addAll(EnumSet.allOf(TransactionOption.class));
+        } else {
+            transactionOptions.add(option);
+        }
+        return this;
+    }
+    /**
+     * Set the locktime flag on the transaction to prevent it becoming
+     * spendable before the specified block height.
+     *
+     * @param blockHeight the block height before which the transaction will not be spendable
+     *                    (must be non-negative and less than 500000000)
+     * @return this builder for chaining
+     */
+    public TransactionBuilder lockUntilBlockHeight(int blockHeight) {
+        if (blockHeight >= Transaction.LOCKTIME_THRESHOLD) {
+            throw new IllegalArgumentException("Block height must be less than " + Transaction.LOCKTIME_THRESHOLD);
+        }
+        if (blockHeight < 0) {
+            throw new IllegalArgumentException("Block height can't be negative");
+        }
+
+        nLockTime = blockHeight;
+        return this;
+    }
+
+    /**
+     * Set the locktime flag on the transaction to prevent it becoming
+     * spendable before the specified time.
+     *
+     * @param timestamp Unix time in seconds (must be at least 500000000)
+     * @return this builder for chaining
+     */
+    public TransactionBuilder lockUntilUnixTime(long timestamp) {
+        if (timestamp < Transaction.LOCKTIME_THRESHOLD) {
+            throw new IllegalArgumentException("Timestamp must be at least " + Transaction.LOCKTIME_THRESHOLD + " (block heights use lockUntilBlockHeight)");
+        }
+        if (timestamp > Transaction.NLOCKTIME_MAX_VALUE) {
+            throw new IllegalArgumentException("Timestamp must be at most " + Transaction.NLOCKTIME_MAX_VALUE);
+        }
+
+        nLockTime = timestamp;
+        return this;
+    }
 
 
     public Transaction build(boolean performChecks) throws TransactionException, IOException, SigHashException, SignatureDecodeException {
+        updateChangeOutput();
+
         if (performChecks){
             runTransactionChecks();
         }
 
+        //a lock time is ignored if every input is final, so take the inputs out of final state
+        if (nLockTime != 0) {
+            for (TransactionInput input : inputs) {
+                if (input.getSequenceNumber() == TransactionInput.MAX_SEQ_NUMBER) {
+                    input.setSequenceNumber(DEFAULT_LOCKTIME_SEQNUMBER);
+                }
+            }
+        }
+
         Transaction tx = new Transaction();
+        if (txVersion != null) {
+            tx.setVersion(txVersion);
+        }
 
         //add transaction inputs
         tx.addInputs(inputs);
 
-        if (changeScriptBuilder != null) {
-            tx.addOutput(getChangeOutput());
-        }
-
         //add transaction outputs
         tx.addOutputs(outputs);
 
+        //change output always goes last
+        if (changeOutput != null) {
+            tx.addOutput(changeOutput);
+        }
 
         tx.setLockTime(nLockTime);
 
@@ -499,13 +554,18 @@ public class TransactionBuilder {
         }
 
         for (TransactionOutput output : outputs) {
+            //unspendable data outputs (OP_RETURN / OP_FALSE OP_RETURN) usually carry 0 satoshis
+            if (isDataOutput(output.getScript())) {
+                continue;
+            }
+
             if (output.getAmount().compareTo(DUST_AMOUNT) == -1 ) {
                 throw new TransactionException("You have outputs with spending values below the dust limit of " + DUST_AMOUNT.toString());
             }
         }
 
         //check for dust on change output
-        if (getChangeOutput() != null && (getChangeOutput().getAmount().compareTo(DUST_AMOUNT) == -1)){
+        if (changeOutput != null && (changeOutput.getAmount().compareTo(DUST_AMOUNT) == -1)){
             throw new TransactionException("You have a change output with spending value below the dust limit of " + DUST_AMOUNT.toString());
         }
 
@@ -528,6 +588,17 @@ public class TransactionBuilder {
                 throw new TransactionException("expected less than " + maximumFee.toString() + " but got " + unspent.toString());
             }
         }
+    }
+
+    private static boolean isDataOutput(Script script) {
+        if (ScriptPattern.isOpReturn(script)) {
+            return true;
+        }
+
+        List<ScriptChunk> chunks = script.getChunks();
+        return chunks.size() > 1
+                && chunks.get(0).equalsOpCode(ScriptOpCodes.OP_FALSE)
+                && chunks.get(1).equalsOpCode(ScriptOpCodes.OP_RETURN);
     }
 
     private BigInteger getUnspentValue(){
@@ -555,38 +626,40 @@ public class TransactionBuilder {
 
 
     private void updateChangeOutput(){
-        //spent amount equals input amount. No change generated. Return.
-        if (calcRecipientTotals() == calcInputTotals()) return;
-
-        //clear change outputs
         changeOutput = null;
+        changeAmount = BigInteger.ZERO;
 
-        changeAmount = calculateChange();
-        TransactionOutput output = getChangeOutput();
-        output.setAmount(changeAmount);
-    }
+        if (changeScriptBuilder == null) return;
 
-    private TransactionOutput getChangeOutput(){
+        //spent amount equals (or exceeds) input amount. No change generated.
+        BigInteger unspent = calcInputTotals().subtract(calcSpendTotals());
+        if (unspent.signum() <= 0) return;
 
-        if (changeScriptBuilder == null) return null;
+        //the change output has to exist before estimating the fee, so that its size is accounted for
+        changeOutput = new TransactionOutput(BigInteger.ZERO, changeScriptBuilder.getLockingScript());
+        BigInteger change = unspent.subtract(getFee());
 
-        if (changeOutput == null ){
-            changeOutput = new TransactionOutput(BigInteger.ZERO, changeScriptBuilder.getLockingScript());
+        if (change.signum() <= 0) {
+            //nothing left over after fees
+            changeOutput = null;
+            return;
         }
 
-        return changeOutput;
+        changeAmount = change;
+        changeOutput.setAmount(change);
     }
 
+    /**
+     * @return the change amount the built transaction will carry (zero if there is no change output)
+     */
     public BigInteger calculateChange(){
-        BigInteger inputAmount = calcInputTotals();
-        BigInteger outputAmount = calcRecipientTotals();
-        BigInteger unspent = inputAmount.subtract(outputAmount);
-
-        return unspent.subtract(getFee()); //sub
+        updateChangeOutput();
+        return changeAmount;
     }
 
-    public void setFee(BigInteger fee){
+    public TransactionBuilder setFee(BigInteger fee){
         transactionFee = fee;
+        return this;
     }
 
     public BigInteger getFee(){
@@ -607,7 +680,9 @@ public class TransactionBuilder {
     private BigInteger estimateFee(){
         long size = estimateSize();
 
-        BigInteger fee = BigInteger.valueOf(new Float(size / 1000 * feePerKb).longValue());
+        //round up to the next whole satoshi
+        BigInteger fee = BigInteger.valueOf(size).multiply(BigInteger.valueOf(feePerKb))
+                .add(BigInteger.valueOf(999)).divide(BigInteger.valueOf(1000));
 
         //if fee is less that 256, set fee at 256 satoshis
         //this is current minimum we set automatically if no explicit fee given
@@ -620,17 +695,56 @@ public class TransactionBuilder {
     }
 
     public long estimateSize(){
-        int result = MAXIMUM_EXTRA_SIZE;
+        long result = MAXIMUM_EXTRA_SIZE;
 
         for (TransactionInput input: inputs){
-            result += SCRIPT_MAX_SIZE; //TODO: we're only spending P2PKH atm.
+            result += estimateInputSize(input);
         }
 
         for (TransactionOutput output: outputs) {
             result += output.getScript().getProgram().length + 9;
         }
 
+        if (changeOutput != null) {
+            result += changeOutput.getScript().getProgram().length + 9;
+        }
+
         return result;
+    }
+
+    /// Estimated size of a P2PKH input, including its unlocking script
+    private static final int P2PKH_INPUT_SIZE = SCRIPT_MAX_SIZE;
+    /// Outpoint (32 + 4) + sequence number (4)
+    private static final int INPUT_OVERHEAD = 32 + 4 + 4;
+    /// DER signature (up to 72 bytes) + sighash byte + push opcode
+    private static final int SIGNATURE_PUSH_SIZE = 72 + 1 + 1;
+
+    private long estimateInputSize(TransactionInput input) {
+        Script unlockingScript = input.getUnlockingScriptBuilder() != null
+                ? input.getUnlockingScriptBuilder().getUnlockingScript()
+                : input.getScriptSig();
+        long actualSize = unlockingScript == null ? 0 : unlockingScript.getProgram().length;
+
+        String mapKey = Utils.HEX.encode(input.getPrevTxnId()) + ":" + input.getPrevTxnOutputIndex();
+        Script lockingScript = lockingScriptMap.get(mapKey);
+
+        long estimatedSize;
+        if (lockingScript != null && ScriptPattern.isP2PK(lockingScript)) {
+            estimatedSize = SIGNATURE_PUSH_SIZE;
+        } else if (lockingScript != null && ScriptPattern.isSentToMultisig(lockingScript)) {
+            //OP_0 followed by m signatures
+            int requiredSigs = Script.decodeFromOpN(lockingScript.getChunks().get(0).opcode);
+            estimatedSize = 1 + (long) requiredSigs * SIGNATURE_PUSH_SIZE;
+        } else if (actualSize > 0) {
+            //unknown template, but a script was provided up front (or already signed)
+            estimatedSize = actualSize;
+        } else {
+            return P2PKH_INPUT_SIZE;
+        }
+
+        //an unsigned input may hold a partial script, so never estimate below what is already there
+        long scriptSize = Math.max(actualSize, estimatedSize);
+        return INPUT_OVERHEAD + new VarInt(scriptSize).getSizeInBytes() + scriptSize;
     }
 
     public BigInteger calcInputTotals(){
@@ -643,17 +757,24 @@ public class TransactionBuilder {
         return amount;
     }
 
+    /**
+     * @return the total of all outputs, including the change output once it has been calculated
+     */
     public BigInteger calcRecipientTotals() {
 
+        BigInteger amount = calcSpendTotals();
+
+        if (changeOutput != null){
+            amount = amount.add(changeOutput.getAmount());
+        }
+
+        return amount;
+    }
+
+    private BigInteger calcSpendTotals() {
         BigInteger amount = BigInteger.ZERO;
         for (TransactionOutput output: outputs) {
             amount = amount.add(output.getAmount());
-        };
-
-        //deduct change output
-        if (changeScriptBuilder != null){
-            TransactionOutput changeOutput = getChangeOutput();
-            amount = amount.add(changeOutput.getAmount());
         }
 
         return amount;

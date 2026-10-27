@@ -19,7 +19,7 @@ public class P2MSLockBuilder extends LockingScriptBuilder{
         super();
         this.sorting = true; //default to true for sorting when not specified
         this.requiredSigs = requiredSigs;
-        this.publicKeyList = publicKeys;
+        this.publicKeyList = new ArrayList<>(publicKeys); //copy, so we never sort the caller's list
 
     }
 

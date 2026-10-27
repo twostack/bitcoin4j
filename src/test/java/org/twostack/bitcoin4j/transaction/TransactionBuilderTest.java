@@ -21,6 +21,7 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
+import static org.junit.Assert.assertEquals;
 import static org.twostack.bitcoin4j.Utils.WHITESPACE_SPLITTER;
 
 public class TransactionBuilderTest {
@@ -69,23 +70,19 @@ public class TransactionBuilderTest {
 
             //loop over every one of our spending inputs and verify we are
             //correctly spending those outputs
-            for (int scriptSigIndex = 0; scriptSigIndex < 0; scriptSigIndex++) {
-                TransactionInput spendingInputOne = TransactionInput.fromByteArray(broadcastTx.getInputs().get(0).serialize());
-                String fundingTxId = Utils.HEX.encode(spendingInputOne.getPrevTxnId());
+            assertEquals(json.size(), broadcastTx.getInputs().size());
+            for (int scriptSigIndex = 0; scriptSigIndex < json.size(); scriptSigIndex++) {
                 Integer fundingOutputIndex = json.get(scriptSigIndex).get("tx_pos").asInt();
                 Long fundingValue = json.get(scriptSigIndex).get("value").asLong();
 
-                //lookup funding transaction corresponding to first output
+                //lookup funding transaction corresponding to this input
                 String rawFundingTx = json.get(scriptSigIndex).get("raw_tx").asText();
-                Transaction fundingTxOne = Transaction.fromHex(rawFundingTx);
-                TransactionOutput fundingOutput = fundingTxOne.getOutputs().get(fundingOutputIndex);
+                Transaction fundingTx = Transaction.fromHex(rawFundingTx);
+                TransactionOutput fundingOutput = fundingTx.getOutputs().get(fundingOutputIndex);
 
-                TransactionSigner signer = new TransactionSigner(SigHashType.FORKID.value | SigHashType.ALL.value, privateKey);
-                Transaction signedTx = signer.sign(broadcastTx, fundingOutput, scriptSigIndex);
-
-                //assert that funding transaction is spending correctly
+                //assert that the signature the builder produced spends the funding output
                 Set<Script.VerifyFlag> verifyFlags = new HashSet<Script.VerifyFlag>(Arrays.asList(Script.VerifyFlag.SIGHASH_FORKID));
-                interp.correctlySpends(signedTx.getInputs().get(scriptSigIndex).getScriptSig(), fundingOutput.getScript(), broadcastTx, scriptSigIndex, verifyFlags, Coin.valueOf(fundingValue));
+                interp.correctlySpends(broadcastTx.getInputs().get(scriptSigIndex).getScriptSig(), fundingOutput.getScript(), broadcastTx, scriptSigIndex, verifyFlags, Coin.valueOf(fundingValue));
             }
 
         }).doesNotThrowAnyException();
@@ -162,7 +159,7 @@ public class TransactionBuilderTest {
             UnlockingScriptBuilder unlocker = new P2PKHUnlockBuilder(privateKey.getPublicKey());
             TransactionSigner signer = new TransactionSigner(SigHashType.ALL.value | SigHashType.FORKID.value, privateKey);
 
-            builder.spendFromOutput(signer, fundingTx.getTransactionId(), fundingOutputIndex, amount, TransactionInput.MAX_SEQ_NUMBER, unlocker);
+            builder.spendFromOutput(signer, fundingTx.getTransactionId(), fundingOutputIndex, amount, fundingTx.getOutputs().get(fundingOutputIndex).getScript(), TransactionInput.MAX_SEQ_NUMBER, unlocker);
 
         }
 
@@ -180,23 +177,19 @@ public class TransactionBuilderTest {
 
             //loop over every one of our spending inputs and verify we are
             //correctly spending those outputs
-            for (int scriptSigIndex = 0; scriptSigIndex < 0; scriptSigIndex++) {
-                TransactionInput spendingInputOne = TransactionInput.fromByteArray(broadcastTx.getInputs().get(0).serialize());
-                String fundingTxId = Utils.HEX.encode(spendingInputOne.getPrevTxnId());
+            assertEquals(json.size(), broadcastTx.getInputs().size());
+            for (int scriptSigIndex = 0; scriptSigIndex < json.size(); scriptSigIndex++) {
                 Integer fundingOutputIndex = json.get(scriptSigIndex).get("tx_pos").asInt();
                 Long fundingValue = json.get(scriptSigIndex).get("value").asLong();
 
-                //lookup funding transaction corresponding to first output
+                //lookup funding transaction corresponding to this input
                 String rawFundingTx = json.get(scriptSigIndex).get("raw_tx").asText();
-                Transaction fundingTxOne = Transaction.fromHex(rawFundingTx);
-                TransactionOutput fundingOutput = fundingTxOne.getOutputs().get(fundingOutputIndex);
+                Transaction fundingTx = Transaction.fromHex(rawFundingTx);
+                TransactionOutput fundingOutput = fundingTx.getOutputs().get(fundingOutputIndex);
 
-                TransactionSigner signer = new TransactionSigner(SigHashType.FORKID.value | SigHashType.ALL.value, privateKey);
-                Transaction signedTx = signer.sign(broadcastTx, fundingOutput, scriptSigIndex);
-
-                //assert that funding transaction is spending correctly
+                //assert that the signature the builder produced spends the funding output
                 Set<Script.VerifyFlag> verifyFlags = new HashSet<Script.VerifyFlag>(Arrays.asList(Script.VerifyFlag.SIGHASH_FORKID));
-                interp.correctlySpends(signedTx.getInputs().get(scriptSigIndex).getScriptSig(), fundingOutput.getScript(), broadcastTx, scriptSigIndex, verifyFlags, Coin.valueOf(fundingValue));
+                interp.correctlySpends(broadcastTx.getInputs().get(scriptSigIndex).getScriptSig(), fundingOutput.getScript(), broadcastTx, scriptSigIndex, verifyFlags, Coin.valueOf(fundingValue));
             }
         }).doesNotThrowAnyException();
 
@@ -255,23 +248,19 @@ public class TransactionBuilderTest {
 
             //loop over every one of our spending inputs and verify we are
             //correctly spending those outputs
-            for (int scriptSigIndex = 0; scriptSigIndex < 0; scriptSigIndex++) {
-                TransactionInput spendingInputOne = TransactionInput.fromByteArray(broadcastTx.getInputs().get(0).serialize());
-                String fundingTxId = Utils.HEX.encode(spendingInputOne.getPrevTxnId());
+            assertEquals(json.size(), broadcastTx.getInputs().size());
+            for (int scriptSigIndex = 0; scriptSigIndex < json.size(); scriptSigIndex++) {
                 Integer fundingOutputIndex = json.get(scriptSigIndex).get("tx_pos").asInt();
                 Long fundingValue = json.get(scriptSigIndex).get("value").asLong();
 
-                //lookup funding transaction corresponding to first output
+                //lookup funding transaction corresponding to this input
                 String rawFundingTx = json.get(scriptSigIndex).get("raw_tx").asText();
-                Transaction fundingTxOne = Transaction.fromHex(rawFundingTx);
-                TransactionOutput fundingOutput = fundingTxOne.getOutputs().get(fundingOutputIndex);
+                Transaction fundingTx = Transaction.fromHex(rawFundingTx);
+                TransactionOutput fundingOutput = fundingTx.getOutputs().get(fundingOutputIndex);
 
-                TransactionSigner signer = new TransactionSigner(SigHashType.FORKID.value | SigHashType.ALL.value, privateKey);
-                Transaction signedTx = signer.sign(broadcastTx, fundingOutput, scriptSigIndex);
-
-                //assert that funding transaction is spending correctly
+                //assert that the signature the builder produced spends the funding output
                 Set<Script.VerifyFlag> verifyFlags = new HashSet<Script.VerifyFlag>(Arrays.asList(Script.VerifyFlag.SIGHASH_FORKID));
-                interp.correctlySpends(signedTx.getInputs().get(scriptSigIndex).getScriptSig(), fundingOutput.getScript(), broadcastTx, scriptSigIndex, verifyFlags, Coin.valueOf(fundingValue));
+                interp.correctlySpends(broadcastTx.getInputs().get(scriptSigIndex).getScriptSig(), fundingOutput.getScript(), broadcastTx, scriptSigIndex, verifyFlags, Coin.valueOf(fundingValue));
             }
         }).doesNotThrowAnyException();
     }
@@ -307,7 +296,7 @@ public class TransactionBuilderTest {
             utxoMap.put("satoshis", amount);
             utxoMap.put("sequenceNumber", TransactionInput.MAX_SEQ_NUMBER);
             utxoMap.put("outputIndex", fundingOutputIndex);
-            utxoMap.put("scriptPubKey", Utils.HEX.encode(fundingTx.getOutputs().get(fundingOutputIndex).serialize()));
+            utxoMap.put("scriptPubKey", Utils.HEX.encode(fundingTx.getOutputs().get(fundingOutputIndex).getScript().getProgram()));
 
             UnlockingScriptBuilder unlocker = new P2PKHUnlockBuilder(privateKey.getPublicKey());
 
@@ -330,23 +319,19 @@ public class TransactionBuilderTest {
 
             //loop over every one of our spending inputs and verify we are
             //correctly spending those outputs
-            for (int scriptSigIndex = 0; scriptSigIndex < 0; scriptSigIndex++) {
-                TransactionInput spendingInputOne = TransactionInput.fromByteArray(broadcastTx.getInputs().get(0).serialize());
-                String fundingTxId = Utils.HEX.encode(spendingInputOne.getPrevTxnId());
+            assertEquals(json.size(), broadcastTx.getInputs().size());
+            for (int scriptSigIndex = 0; scriptSigIndex < json.size(); scriptSigIndex++) {
                 Integer fundingOutputIndex = json.get(scriptSigIndex).get("tx_pos").asInt();
                 Long fundingValue = json.get(scriptSigIndex).get("value").asLong();
 
-                //lookup funding transaction corresponding to first output
+                //lookup funding transaction corresponding to this input
                 String rawFundingTx = json.get(scriptSigIndex).get("raw_tx").asText();
-                Transaction fundingTxOne = Transaction.fromHex(rawFundingTx);
-                TransactionOutput fundingOutput = fundingTxOne.getOutputs().get(fundingOutputIndex);
+                Transaction fundingTx = Transaction.fromHex(rawFundingTx);
+                TransactionOutput fundingOutput = fundingTx.getOutputs().get(fundingOutputIndex);
 
-                TransactionSigner signer = new TransactionSigner(SigHashType.FORKID.value | SigHashType.ALL.value, privateKey);
-                Transaction signedTx = signer.sign(broadcastTx, fundingOutput, scriptSigIndex);
-
-                //assert that funding transaction is spending correctly
+                //assert that the signature the builder produced spends the funding output
                 Set<Script.VerifyFlag> verifyFlags = new HashSet<Script.VerifyFlag>(Arrays.asList(Script.VerifyFlag.SIGHASH_FORKID));
-                interp.correctlySpends(signedTx.getInputs().get(scriptSigIndex).getScriptSig(), fundingOutput.getScript(), broadcastTx, scriptSigIndex, verifyFlags, Coin.valueOf(fundingValue));
+                interp.correctlySpends(broadcastTx.getInputs().get(scriptSigIndex).getScriptSig(), fundingOutput.getScript(), broadcastTx, scriptSigIndex, verifyFlags, Coin.valueOf(fundingValue));
             }
         }).doesNotThrowAnyException();
     }

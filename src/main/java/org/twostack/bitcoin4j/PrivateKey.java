@@ -35,10 +35,15 @@ public class PrivateKey {
     }
 
     public PrivateKey(ECKey key){
-        this(key, true, NetworkType.MAIN);
+        this(key, key.isCompressed(), NetworkType.MAIN);
     }
 
     public PrivateKey(ECKey key, boolean isCompressed, NetworkType networkType) {
+        //keep the ECKey's public point compression in line with the flag, since it governs
+        //both the derived public key (and hence Address) and the WIF encoding
+        if (key.isCompressed() != isCompressed) {
+            key = isCompressed ? ECKey.fromPrivate(key.getPrivKey(), true) : key.decompress();
+        }
         this.key = key;
         this._hasCompressedPubKey = isCompressed;
         this._networkType = networkType;
@@ -87,9 +92,16 @@ public class PrivateKey {
         String keyHex = Utils.HEX.encode(keyBytes);
         BigInteger d = new BigInteger(keyHex, 16);
 
-        ECKey key = ECKey.fromPrivate(d);
+        ECKey key = ECKey.fromPrivate(d, isCompressed);
 
         return new PrivateKey(key, isCompressed, networkType);
+    }
+
+    /**
+     * @return true if this key's public key (and Address) uses the compressed encoding
+     */
+    public boolean isCompressed() {
+        return _hasCompressedPubKey;
     }
 
     public String toWif(NetworkType networkType){

@@ -68,7 +68,7 @@ public class Script {
     }
 
     /** Flags to pass to {Script#correctlySpends(Transaction, int, Coin, Script, Set)}.
-     * Note currently only P2SH, DERSIG and NULLDUMMY are actually supported.
+     * MONOLITH_OPCODES is accepted for compatibility but has no effect.
      */
     public enum VerifyFlag {
         P2SH, // Enable BIP16-style subscript evaluation.
@@ -83,7 +83,7 @@ public class Script {
         CHECKLOCKTIMEVERIFY, // Enable CHECKLOCKTIMEVERIFY operation
         CHECKSEQUENCEVERIFY,
         SIGHASH_FORKID,
-        MONOLITH_OPCODES, // May 15, 2018 Hard fork
+        MONOLITH_OPCODES, // May 15, 2018 Hard fork. No effect: the Monolith opcodes (OP_CAT, OP_SPLIT, etc.) are always enabled.
         UTXO_AFTER_GENESIS,
         MINIMALIF,
         NULLFAIL,
